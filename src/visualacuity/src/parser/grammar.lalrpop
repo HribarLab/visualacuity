@@ -1,0 +1,267 @@
+use crate::{
+    DistanceItem, ParsedItem, ParsedItemCollection, PinHoleEffect, FixationPreference, SnellenRow, JaegerRow, Input,
+     DistanceOfMeasurement, NotTakenReason
+};
+use crate::parser::grammar_helpers::{merge_consecutive_texts, extract_integers, extract_integer, handle_error};
+use crate::ParsedItem::*;
+use crate::LowVisionMethod::*;
+use crate::FixationPreference::*;
+use crate::VisualAcuityError::*;
+use crate::DistanceOfMeasurement::*;
+use crate::Laterality::*;
+use crate::Correction::*;
+use crate::DistanceOfMeasurement::*;
+
+use lalrpop_util::ParseError::*;
+use num_traits::FromPrimitive;
+
+grammar;
+
+ParseInt<T>: u64 = { T =>? <>.parse().map_err(|e| User { error: "Parse int error!" } ) };
+ParseFloat<T>: f64 = { T =>? <>.parse().map_err(|e| User { error: "Parse float error!" } ) };
+NumberFloat: f64 = { ParseFloat<_NumberFloat>, ParseFloat<_NumberInteger>, NumberFraction };
+Integer: u64 = { ParseInt<_NumberInteger> };
+Number: f64 = { NumberFloat };
+
+NumberFraction: f64 = {
+    "1/2" => 0.5,
+    <b:Integer> "1/2" => (b as f64) + 0.5,
+}
+
+pub ChartNotes: ParsedItemCollection<'input> = {
+    Input<VA>+ => ParsedItemCollection(merge_consecutive_texts(<>))
+}
+
+VA: ParsedItem<'input> = {
+    Snellen,
+    Jaeger,
+    Teller,
+    PlusLetters,
+    LowVision,
+    BinocularFixation,
+    NotTaken,
+    ETDRS,
+    VisitInfo,
+    Input<!> => handle_error(<>)
+}
+
+pub(crate) Snellen: ParsedItem<'input> = {
+    <SnellenFraction> => Snellen(<>.1)
+};
+
+pub(crate) SnellenFraction: (SnellenRow, SnellenRow) = {
+    _SnellenFraction => extract_integers(<>).unwrap(),
+    _SnellenEquivalentFraction => extract_integers(<>).unwrap(),
+};
+
+pub(crate) Jaeger: ParsedItem<'input> = {
+    <row:JaegerRow> => Jaeger(row),
+};
+
+pub(crate) JaegerRow: JaegerRow = {
+    _JaegerRow =>? <>.parse().map_err(|_| User{error: "Invalid Jaeger Row"})
+};
+
+pub(crate) Teller: ParsedItem<'input> = {
+    <f:TellerFraction> <cy_cm:TellerCyCm?> <card:TellerCardNumber?> => match (f, cy_cm, card) {
+        ((_, row), _, Some(card)) => Teller{ row, card },
+        ((_, row), _, _) => Teller{ row, card: 0 }
+    }
+};
+
+TellerFraction: (u16, u16) = {
+    _TellerFraction => extract_integers(<>).unwrap()
+};
+
+pub(crate) TellerCyCm: f64 = {
+    <cy_cm:NumberFloat> _CyCm => cy_cm
+};
+
+pub(crate) TellerCardNumber: u16 = {
+    _Card <n:Integer> => n as u16
+};
+
+pub(crate) ETDRS: ParsedItem<'input> = {
+    _ETDRS? <letters:NLetters> => ETDRS{letters},
+};
+
+NLetters: u32 = {
+    _NLetters => { let (n, ) = extract_integers(<>).unwrap(); n }
+};
+
+pub(crate) LowVision: ParsedItem<'input> = {
+    _CountingFingers <distance:AtDistance?> => LowVision{method: CountingFingers, distance: distance.flatten() },
+    _HandMotion <distance:AtDistance?> => LowVision{method: HandMovement, distance: distance.flatten() },
+    _LightPerception <distance:AtDistance?> => LowVision{method: LightPerception, distance: distance.flatten() },
+    _NoLightPerception <distance:AtDistance?> => LowVision{method: NoLightPerception, distance: distance.flatten() },
+    SensitiveToLight <distance:AtDistance?> => LowVision{method: LightPerception, distance: distance.flatten() },
+    Negation SensitiveToLight <distance:AtDistance?> => LowVision{method: NoLightPerception, distance: distance.flatten() },
+    _PinHoleNoImprovement => PinHoleEffectItem(PinHoleEffect::NI),
+};
+
+SensitiveToLight: () = {
+    _SensitiveToLight => (),
+    _Sensitive _ToLight => (),
+};
+
+BinocularFixation: ParsedItem<'input> = {
+    BinocularFixationPreference => BinocularFixation(<>),
+};
+
+BinocularFixationPreference: FixationPreference = {
+    _FixationPreference => match <>.to_uppercase().replace(['(', ')'], "").as_str() {
+        "CSM" => CSM,
+        "CUSM" => CUSM,
+        "CSUM" => CSUM,
+        "CUSUM" => CUSUM,
+        "UCSM" => UCSM,
+        "UCUSM" => UCUSM,
+        "UCSUM" => UCSUM,
+        "UCUSUM" => UCUSUM,
+        _ => unreachable!("{}", <>)
+    },
+    _FF => FixAndFollow,
+    _FixAndFollow => FixAndFollow,
+    Negation _FixAndFollow => NoFixAndFollow,
+    _FixNoFollow => FixNoFollow,
+    _Prefers => Prefers,
+    _Holds => Holds,
+};
+
+NotTaken: ParsedItem<'input> = {
+    _NT => NotTakenItem(NotTakenReason::NT),
+    _Refused => NotTakenItem(NotTakenReason::Refused),
+    _Unable => NotTakenItem(NotTakenReason::Unable),
+    _Sleeping => NotTakenItem(NotTakenReason::Sleeping),
+    _Prosthesis => NotTakenItem(NotTakenReason::Prosthesis),
+    _SeeMR => NotTakenItem(NotTakenReason::SeeMR),
+};
+
+pub(crate) PlusLetters: ParsedItem<'input> = {
+    _PlusLetters => PlusLettersItem(<>.replace(&[' ', '+'], "").parse().unwrap())
+}
+
+pub(crate) AtDistance: Option<DistanceOfMeasurement> = {
+    // TODO: Check these!
+    "to face" => Some(Near),
+    _At? _Face => Some(Near),
+    _At? _Close => Some(Near),
+    _At? <_InchRange> => Some(Near),
+    _At? <_NInches> => Some(Near),
+    _At? <d:Number> "\"" => Some(Near),
+    "to wall" => Some(Distance),
+    _At? <_NFeet> => Some(Distance),
+    _At? <_FeetRange> => Some(Distance),
+    _At? OtherToken => None,  // Discarding the messy stuff for now
+};
+
+pub(crate) VisitInfo: ParsedItem<'input> = {
+    VisitDistance,
+    VisitEye,
+    VisitCorrection,
+    VisitPinHole,
+};
+
+VisitDistance: ParsedItem<'input> = {
+    _Near => DistanceItem(Near),
+    _Distance => DistanceItem(Distance),
+};
+
+VisitEye: ParsedItem<'input> = {
+    _OS => LateralityItem(OS),
+    _OD => LateralityItem(OD),
+    _OU => LateralityItem(OU),
+};
+
+VisitCorrection: ParsedItem<'input> = {
+    _SC => CorrectionItem(SC),
+    _CC => CorrectionItem(CC),
+}
+
+VisitPinHole: ParsedItem<'input> = {
+    _PinHole => PinHoleItem(crate::PinHole::With),
+}
+
+Negation = { _No, _Not }
+
+//** TOKENIZATION **
+//
+//This match/else block defines the regular expressions to extract tokens from input text.
+//Entries in the `match` portion take priority over the `else` portion. Otherwise, the longest
+//matching token is chosen.
+match {
+
+    r#"[ \t\n\f,()]"# => {}, // Discard spaces and non-token symbols
+
+    // Other tokens
+    r#"\d+"# => _NumberInteger,
+    r#"\d*\.\d+"# => _NumberFloat,
+    r#"20\s*/\s*(600|500|400|300|250|200|150|125|100|80|70|60|50|40|30|25|20|15)"# => _SnellenFraction,
+    r#"20\s*/\s*(800|640|320|160|63|32|12|10)"# => _SnellenEquivalentFraction,
+    r#"20\s*/\s*(2700|2000|1400|1000|670|540|360|270|180|130|89|66|45|33|23)"# => _TellerFraction,
+    r#"[Jj]\s*(29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|9|8|7|6|5|4|3|2|1\+|1)"# => _JaegerRow,
+    r#"[-+]\s*[1-6]"# => _PlusLetters,
+
+    r#"(?i)card"# => _Card,
+    r#"(?i)cy\s*/\s*cm"# => _CyCm,
+    r#"(?i)U?CU?SU?(\(M\)|M)"# => _FixationPreference,
+    r#"(?i)face"# => _Face,
+    r#"(?i)F\s*(and|\+|/|&)?\s*F"# => _FF,
+    r#"(?i)fix\s*(and|\+|/|&|,)?\s*follow"# => _FixAndFollow,
+    r#"(?i)fix[,\s]*(no)\s*follow"# => _FixNoFollow,
+    r#"(?i)(prefers?|pref|p)"# => _Prefers,
+    r#"(?i)(holds?)"# => _Holds,
+
+    r#"(?i)(@|at)"# => _At,
+    r#"(?i)\d+(\.\d+|\s+1/2)?\s*(feet|foot|ft\.?|f\.?|')"# => _NFeet,
+    r#"(?i)\d+(\.\d+|\s+1/2)?\s*(inches|inch|in\.?|")"# => _NInches,
+    r#"(?i)\d+(\.\d+|\s+1/2)?\s*(to|-)\s*\d+(\.\d+|\s+1/2)?\s*(feet|foot|ft\.?|f\.?|')"# => _FeetRange,
+    r#"(?i)\d+(\.\d+|\s+1/2)?\s*(to|-)\s*\d+(\.\d+|\s+1/2)?\s*(inches|inch|in\.?|")"# => _InchRange,
+
+    r#"(?i)(pin hole|pinhole|PH)"# => _PinHole,
+    r#"(?i)ni"# => _PinHoleNoImprovement,
+    r#"(?i)close"# => _Close,
+    r#"(?i)no"# => _No,
+    r#"(?i)not"# => _Not,
+
+    r#"(?i)ETDRS"# => _ETDRS,
+    r#"(?i)\d+\s*(letters|ltt?rs)"# => _NLetters,
+    r#"(?i)CF(at|@)?"# => _CountingFingers,
+    r#"(?i)HM(at|@)?"# => _HandMotion,
+    r#"(?i)LP(at|@)?"# => _LightPerception,
+    r#"(?i)NLP(at|@)?"# => _NoLightPerception,
+    //adversion|adverts|adverts|asverts|averse|aversion|aversive|averst|avert|avertion|averts head|averts|avets|avrtes|avters|bats|blibks|bliniks|blink intermittently|blinkd|bllinks|closes eye|closes eyes|dazzles|does not advert|does not avert|does not react|flinching|fusses|grimace|grimaces more|grimaces|grimmases|limited reaction|looks down|mild aversion|mild squint|objects|possible objection|protests|reactive|reacts|reflexes|refused bliks|resonds|responds|response|rxn|squints|waves left arm|whince|wicne|wince|winces|winch|withdraws
+    r#"(?i)(OS|Left Eye)"# => _OS,
+    r#"(?i)(OD|Right Eye)"# => _OD,
+    r#"(?i)(OU|Both Eyes)"# => _OU,
+
+    r#"(?i)near"# => _Near,
+    r#"(?i)distance"# => _Distance,
+
+    r#"(?i)(CC)"# => _CC,
+    r#"(?i)(SC)"# => _SC,
+
+    r"(?i)(not taken|NT)" => _NT,
+    r"(?i)unable" => _Unable,
+    r"(?i)refused" => _Refused,
+    r"(?i)see mr" => _SeeMR,
+    r"(?i)sleeping" => _Sleeping,
+    r"(?i)(pros[a-z]*\.?)" => _Prosthesis,
+
+
+    r#"(?i)((to)?\s*light)"# => _ToLight,
+    r#"(?i)([BRW]( to |T)L)"# => _SensitiveToLight,
+
+    r#"(?i)(ad?ver\w+|bat(ting|s)?|blink(ing|s)?|clos(ing|es?) eyes?|dazzl(ing|es?)|flinch(ing|s)?|fuss(ing|es)|grimac(ing|es?)|looks down|object(ion|ing|s)?|protest(ing|s)?|react\w*|reflex(es)?|respon\w+|rxn|squint(ing|s)?|wh?inc(ing|es?)?|winch(ing|es)?|withdraw(ing|s)?)"#
+        => _Sensitive,
+    r#"(?i)more"# => _More,
+    //    averts head
+} else {
+    r#"[,]|\p{Letter}+|\p{Symbol}|\p{Punctuation}"# => OtherToken,
+    _ // catch-all
+}
+
+Input<T>: Input<'input, T> = {
+    // Macro to give us handy access to inputs etc.
+    <left:@L> <content:T> <right:@R> => Input{content, left, right, input }
+};
