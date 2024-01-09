@@ -7,23 +7,38 @@ env:
 
 on:
   push:
-    branches: [ "main", "BuildActions" ]
+    branches:
+      - main
+      - BuildActions
   pull_request:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
   build-core:
-    name: Build Core
+    name: "⚙️ Rust Library ⚙️"
     strategy:
       matrix:
-        os: [ubuntu-latest]
+        os:
+          - ubuntu-latest
+          - windows-latest
+#          - macos-latest
+#          - macos-10.15
+        python-version:
+          - "3.11"
     runs-on: ${{ matrix.os }}
     outputs:
       output1: ${{ steps.target-dir.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v3
 
-      - name: Build Cache
+      # Installing python might help with re-building on the later step
+      - name: "Set up Python ${{ matrix.python-version }}"
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: "Cache"
         id: cached-build
         uses: actions/cache@v3
         continue-on-error: false
@@ -32,34 +47,41 @@ jobs:
             target/
             ~/vendor/
             ~/.cargo/config.toml
-          key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('Cargo.toml', 'src/visualacuity/**') }}
+          lookup-only: true
 
-      - if: ${{ steps.cached-build.outputs.cache-hit != 'true' }}
-        name: Vendor
+      - name: "Vendor"
+        if: ${{ steps.cached-build.outputs.cache-hit != 'true' }}
         run: |
           cargo vendor --verbose
           mv vendor ~
           cp vendor.toml ~/.cargo/config.toml
 
-      - if: ${{ steps.cached-build.outputs.cache-hit != 'true' }}
-        name: Build
+      - name: "Build"
+        if: ${{ steps.cached-build.outputs.cache-hit != 'true' }}
         run: cargo build --verbose --workspace
 
-      - if: ${{ steps.cached-build.outputs.cache-hit != 'true' }}
-        name: Test (Rust)
-        run: cargo test --verbose
+      - name: "Test"
+        if: ${{ steps.cached-build.outputs.cache-hit != 'true' }}
+        run: cargo test --verbose --package visualacuity
 
   build-python:
+    name: "🐍 Python Package 🐍"
     needs: build-core
     strategy:
       matrix:
-        os: [ubuntu-latest]
-        python-version: [ "3.9" ]
+        os:
+          - ubuntu-latest
+          - windows-latest
+#          - macos-latest
+#          - macos-10.15
+        python-version:
+          - "3.11"
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v3
 
-      - name: Build Cache
+      - name: "Cache"
         uses: actions/cache@v3
         continue-on-error: false
         with:
@@ -67,29 +89,91 @@ jobs:
             target/
             ~/vendor/
             ~/.cargo/config.toml
-          key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          key: ${{ matrix.os }}-cargo-python${{ matrix.python-version }}-${{ hashFiles('Cargo.toml', 'src/visualacuity/**', 'pyproject.toml', 'src/visualacuity-python/**') }}
+          restore-keys: ${{ matrix.os }}-cargo-${{ hashFiles('Cargo.toml', 'src/visualacuity/**') }}
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: "Set up Python ${{ matrix.python-version }}"
         uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
 
-      - name: Install Python Build Dependencies
-        run: pip install -r $VA_SRC_PYTHON/requirements.txt
+      - name: "Install Python Build Dependencies"
+        run: pip install -r ${{ env.VA_SRC_PYTHON }}/requirements.txt
 
-      - name: Build Python
-        run: |
-          python -m maturin sdist --manifest-path $VA_SRC_PYTHON/Cargo.toml
-          python -m maturin build --manifest-path $VA_SRC_PYTHON/Cargo.toml
+      - name: "Build wheel"
+        run: maturin build --manifest-path ${{ env.VA_SRC_PYTHON }}/Cargo.toml
 
-      - name: 'Upload sdist'
+      - name: "Upload wheel"
+        id: upload-wheel
         uses: actions/upload-artifact@v4
         with:
-          name: sdist
+          name: python-wheel-${{ matrix.os }}
+          path: target/wheels/*.whl
+
+      - name: "Build sdist"
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cp pyproject.toml ${{ env.VA_SRC_PYTHON }}
+          maturin sdist --manifest-path ${{ env.VA_SRC_PYTHON }}/Cargo.toml
+
+      - name: "Upload sdist"
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-sdist
           path: target/wheels/*.tar.gz
 
-      - name: 'Upload wheel'
-        uses: actions/upload-artifact@v4
+
+  test-python:
+    name: "🐍 Python Tests 🐍"
+    needs: build-python
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+#          - macos-latest
+#          - macos-10.15
+        python-version:
+          - "3.7"
+          - "3.8"
+          - "3.9"
+          - "3.10"
+          - "3.11"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: "Set up Python ${{ matrix.python.test-version }}"
+        uses: actions/setup-python@v3
         with:
-          name: wheel-${{ matrix.os }}-python-${{ matrix.python-version }}
-          path: target/wheels/*.whl
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: "Download wheel"
+        id: download-wheel
+        uses: actions/download-artifact@v4
+        with:
+          name: python-wheel-${{ matrix.os }}
+
+      - name: "Install wheel"
+        run: pip install $(ls *.whl) --force-reinstall
+
+      - name: "Debug wheel"
+        if: failure()
+        run: pip debug -vvv $(ls *.whl)
+
+      - name: "Test with pytest"
+        run: |
+          pip install pytest pytest-subtests pytest-cov
+          mv src/visualacuity-python/tests .
+          pytest tests --doctest-modules --junitxml=reports/python-test-report.xml # --cov=com --cov-report=xml --cov-report=html
+
+#      - name: "Test Report"
+#        if: success() || failure()
+#        uses: dorny/test-reporter@v1
+#        with:
+#          name: python-test-report-${{ matrix.python-version }}
+#          path: reports/python-test-report.xml
+#          reporter: jest-junit
