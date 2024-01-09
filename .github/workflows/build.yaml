@@ -1,0 +1,95 @@
+name: build-test
+run-name: Build & Test
+
+env:
+  VA_SRC_PYTHON: src/visualacuity-python
+  CORE_PACKAGE: visualacuity
+
+on:
+  push:
+    branches: [ "main", "BuildActions" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-core:
+    name: Build Core
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    outputs:
+      output1: ${{ steps.target-dir.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build Cache
+        id: cached-build
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            target/
+            ~/vendor/
+            ~/.cargo/config.toml
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+
+      - if: ${{ steps.cached-build.outputs.cache-hit != 'true' }}
+        name: Vendor
+        run: |
+          cargo vendor --verbose
+          mv vendor ~
+          cp vendor.toml ~/.cargo/config.toml
+
+      - if: ${{ steps.cached-build.outputs.cache-hit != 'true' }}
+        name: Build
+        run: cargo build --verbose --workspace
+
+      - if: ${{ steps.cached-build.outputs.cache-hit != 'true' }}
+        name: Test (Rust)
+        run: cargo test --verbose
+
+  build-python:
+    needs: build-core
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        python-version: [ "3.9" ]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Build Cache
+        uses: actions/cache@v3
+        continue-on-error: false
+        with:
+          path: |
+            target/
+            ~/vendor/
+            ~/.cargo/config.toml
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install Python Build Dependencies
+        run: pip install -r $VA_SRC_PYTHON/requirements.txt
+
+      - name: Build Python
+        run: |
+          python -m maturin sdist --manifest-path $VA_SRC_PYTHON/Cargo.toml
+          python -m maturin build --manifest-path $VA_SRC_PYTHON/Cargo.toml
+
+      - name: 'Upload sdist'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: target/wheels/*.tar.gz
+
+      - name: 'Upload wheel'
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheel-${{ matrix.os }}-python-${{ matrix.python-version }}
+          path: target/wheels/*.whl
