@@ -259,7 +259,8 @@ mod tests {
         let visit_notes = HashMap::from([("fieldname", notes)]);
         let parsed_notes = PARSER.parse_visit(visit_notes);
         let base_item = parsed_notes?.into_iter().map(|(_, v)| v).next().expect("");
-        assert_eq!(base_item.log_mar_base, expected);
+        let approx = |x| Some(format!("{:.8}", x?));
+        assert_eq!(base_item.log_mar_base.map(approx), expected.map(approx));
         Ok(())
     }
 
