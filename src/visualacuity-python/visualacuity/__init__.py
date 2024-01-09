@@ -1,3 +1,4 @@
+from visualacuity import _lib
 from visualacuity._types import (
     VisitNote,
     Laterality,

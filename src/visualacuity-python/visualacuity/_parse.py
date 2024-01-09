@@ -1,4 +1,4 @@
-from functools import cache
+from functools import lru_cache
 from typing import Dict
 
 from visualacuity import Laterality, DistanceOfMeasurement, Correction, Method, PinHole
@@ -29,7 +29,7 @@ def parse_visit(notes: Dict[str, str]) -> Dict[str, VisitNote]:
         raise Exception(f"{e}: `{notes}`") from e
 
 
-@cache
+@lru_cache(maxsize=None)
 def _convert_enum(enum):
     type_name, value = str(enum).split(".")
     return _CONVERTIBLE_ENUMS[type_name][value]
