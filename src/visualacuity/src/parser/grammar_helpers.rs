@@ -65,7 +65,7 @@ pub(crate) fn handle_error<'a>(boxed_value: Input<'a, ErrorRecovery<usize, Token
 #[cfg(test)]
 mod tests {
     use crate::Input;
-    use crate::parser::helpers::merge_consecutive_texts;
+    use crate::parser::grammar_helpers::merge_consecutive_texts;
     use crate::ParsedItem::*;
 
     #[test]
