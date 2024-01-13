@@ -5,7 +5,7 @@ This software is available under the GNU General Public License v3.0. See the [L
 ### Installation
 
 ```bash
-pip install -i https://test.pypi.org/simple/ visualacuity-preview==0.1.0a0
+pip install -i https://test.pypi.org/simple/ visualacuity-preview==0.1.0a1
 ```
 
 ### Example Usage
