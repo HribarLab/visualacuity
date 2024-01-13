@@ -16,6 +16,3 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-dependencies = [
-    "cffi >=1.15.1, <1.16",
-]
