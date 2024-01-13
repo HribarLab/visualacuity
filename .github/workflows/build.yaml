@@ -196,7 +196,7 @@ jobs:
           PACKAGE_VERSION=$(echo dist/*.tar.gz | sed -e 's/.*-\(.*\)\.tar\.gz/\1/')
           git tag python-$(PACKAGE_VERSION)
 
-      - name: "Upload binaries to release"
+      - name: "Upload binaries to GitHub Release"
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
@@ -204,6 +204,12 @@ jobs:
           tag: refs/tags/python-latest # ${{ github.ref }}
           overwrite: true
           file_glob: true
+
+      - name: "Publish package to TestPyPI"
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          repository-url: https://test.pypi.org/legacy/
 
 #        - name: Publish package
 #          uses: pypa/gh-action-pypi-publish@v1
