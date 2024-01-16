@@ -1,3 +1,5 @@
+# To publish a package to PyPI, create and push a tag formatted like "python-0.1.0a1"
+
 name: build-test
 run-name: Build & Test
 
@@ -10,13 +12,16 @@ on:
     branches:
       - main
       - BuildActions
+    tags:
+      - "python-*"
+      - "test-python-*"
   pull_request:
     branches:
       - main
 
 jobs:
   vendor:
-    name: "⚙️ Rust Vendoring ⚙️"
+    name: "⚙️ Rust Pre-build ⚙️"
     runs-on: ubuntu-latest
     outputs:
       output1: ${{ steps.target-dir.outputs.artifact-id }}
@@ -28,18 +33,17 @@ jobs:
         uses: actions/cache@v3
         continue-on-error: false
         with:
+          enableCrossOsArchive: true
           path: |
-            ~/vendor/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
             ~/.cargo/config.toml
-          key: rust-vendor
+          key: rust-prebuild-${{ hashFiles('**/Cargo.toml') }}
           lookup-only: true
 
-      - name: "Vendor"
+      - name: "Making 'fetch' happen"
         if: ${{ steps.cached-build.outputs.cache-hit != 'true' }}
-        run: |
-          cargo vendor --verbose
-          mv vendor ~
-          cp vendor.toml ~/.cargo/config.toml
+        run: cargo fetch --verbose
 
 
   build-core:
@@ -58,10 +62,11 @@ jobs:
         with:
           path: |
             target/
-            ~/vendor/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
             ~/.cargo/config.toml
           key: rust-${{ matrix.system.os }}-${{ matrix.system.target }}-${{ hashFiles('Cargo.toml', 'src/visualacuity/**') }}
-          restore-keys: rust-vendor
+          restore-keys: rust-prebuild-${{ hashFiles('**/Cargo.toml') }}
           lookup-only: true
 
       - name: "Build"
@@ -79,13 +84,7 @@ jobs:
       matrix:
         system:
           - { os: ubuntu-latest, target: x86_64, architecture: x64 }
-          #          - { os: ubuntu-latest, target: x86, architecture: x86 }
-          #          - { os: ubuntu-latest, target: aarch64, architecture: arm64 }
-          #          - { os: ubuntu-latest, target: armv7, architecture: x64 }
-          #          - { os: ubuntu-latest, target: s390x, architecture: x64 }
-          #          - { os: ubuntu-latest, target: ppc64le, architecture: x64 }
           - { os: windows-latest, target: x64, architecture: x64 }
-          #          - { os: windows-latest, target: x86, architecture: x86 }
           - { os: macos-latest, target: x86_64, architecture: x64 }
           - { os: macos-latest, target: aarch64, architecture: arm64 }
         python-version:
@@ -99,30 +98,28 @@ jobs:
         continue-on-error: false
         with:
           path: |
-            ~/vendor/
+            target/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
             ~/.cargo/config.toml
-          key: rust-vendor
+          key: python-${{ matrix.python-version }}-${{ matrix.system.os }}-${{ matrix.system.target }}--${{ hashFiles('Cargo.toml', 'src/visualacuity/**') }}
+          restore-keys: rust-prebuild-${{ hashFiles('**/Cargo.toml') }}
 
-      - name: "Set up Python ${{ matrix.python-version }}_${{ matrix.system.architecture}}"
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ matrix.python-version }}
-          architecture: ${{ matrix.system.architecture }}
+#      - name: "Maturin — sdist"
+#        if: matrix.system.os == 'ubuntu-latest' && matrix.system.target == 'x86_64'
+#        run: maturin sdist --verbose --out dist --manifest-path ${{ env.VA_SRC_PYTHON }}/Cargo.toml
 
-      - name: "Install Python Build Dependencies"
-        run: pip install -r ${{ env.VA_SRC_PYTHON }}/requirements.txt
-
-      - name: "Build sdist"
-        if: matrix.system.os == 'ubuntu-latest' && matrix.system.target == 'x86_64'
-        run: maturin sdist --out dist --manifest-path src/visualacuity-python/Cargo.toml
-
-      - name: "Build wheel"
+      - name: "Maturin — wheel"
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.system.target }}
-          args: --release --out dist --manifest-path ${{ env.VA_SRC_PYTHON }}/Cargo.toml
-          sccache: 'true'
+          args:  --verbose --release --out dist --manifest-path ${{ env.VA_SRC_PYTHON }}/Cargo.toml --sdist
+          sccache: true
           manylinux: auto
+
+      - name: "Workaround for caching permission errors"
+        if: matrix.system.os == 'ubuntu-latest'
+        run: sudo chmod -R a+r target
 
       - name: "Upload"
         uses: actions/upload-artifact@v3
@@ -162,12 +159,14 @@ jobs:
           path: dist
 
       - name: "Install wheel"
-        run: pip install visualacuity-preview --find-links dist --force-reinstall --target=${{ env.VA_SRC_PYTHON }} --upgrade
+        id: install
+        run: pip install visualacuity --find-links dist --force-reinstall --target=${{ env.VA_SRC_PYTHON }} --upgrade
 
       - name: "Test with pytest"
         run: |
           pip install pytest pytest-subtests pytest-cov
           pytest ${{ env.VA_SRC_PYTHON }}/tests --doctest-modules --junitxml=reports/python-test-report.xml # --cov=com --cov-report=xml --cov-report=html
+
   #      - name: "Test Report"
   #        if: success() || failure()
   #        uses: dorny/test-reporter@v1
@@ -190,44 +189,37 @@ jobs:
           name: python-wheels
           path: dist
 
-      - name: "Set tag"
-        run:
-          PACKAGE_VERSION=$(echo dist/*.tar.gz | sed -e 's/.*-\(.*\)\.tar\.gz/\1/')
-          git tag python-$(PACKAGE_VERSION)
+      - name: "Help (on no-publish)"
+        if: ${{ ! startsWith(github.ref, 'refs/tags') }}
+        run: |
+          VERSION=$(echo dist/*.tar.gz | sed -e 's/.*-\(.*\)\.tar\.gz/\1/')
+          echo "## Successfully built & tested `visualacuity-$VERSION`!" >> $GITHUB_STEP_SUMMARY
+          echo "To publish this package:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "```bash" >> $GITHUB_STEP_SUMMARY
+          echo "git tag python-$VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "git push --tags" >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
 
       - name: "Upload binaries to GitHub Release"
+        if: startsWith(github.ref, 'refs/tags/python-') || startsWith(github.ref, 'refs/tags/test-python-')
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: dist/*
-          tag: refs/tags/python-latest # ${{ github.ref }}
-          overwrite: true
+          tag: ${{ github.ref }}
+          overwrite: false
           file_glob: true
 
       - name: "Publish package to TestPyPI"
+        if: startsWith(github.ref, 'refs/tags/test-python-')
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.TEST_PYPI_API_TOKEN }}
           repository-url: https://test.pypi.org/legacy/
 
-#        - name: Publish package
-#          uses: pypa/gh-action-pypi-publish@v1
-#          with:
-#            password: ${{ secrets.PYPI_API_TOKEN }}
-
-#  release:
-#    name: Release
-#    runs-on: ubuntu-latest
-#    if: "startsWith(github.ref, 'refs/tags/')"
-#    needs: [linux, windows, macos, sdist]
-#    steps:
-#      - uses: actions/download-artifact@v3
-#        with:
-#          name: wheels
-#      - name: Publish to PyPI
-#        uses: PyO3/maturin-action@v1
-#        env:
-#          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
-#        with:
-#          command: upload
-#          args: --non-interactive --skip-existing *
+      - name: "Publish package to PyPI"
+        if: startsWith(github.ref, 'refs/tags/python-')
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}

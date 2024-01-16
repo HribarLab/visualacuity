@@ -15,7 +15,7 @@ the software):
 ### Installation
 
 ```bash
-pip install -i https://test.pypi.org/simple/ visualacuity-preview
+pip install visualacuity
 ```
 
 ### Example Usage
