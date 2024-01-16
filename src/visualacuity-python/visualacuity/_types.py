@@ -49,6 +49,12 @@ class PinHole(_ConciseEnumRepr, Enum):
     WITHOUT = "Without"
 
 
+class SnellenEquivalent(Tuple[int, int]):
+    def __str__(self):
+        distance, row = self
+        return f"{distance}/{row}"
+
+
 @dataclass(unsafe_hash=True)
 class VisitNote:
     text: str = ""
@@ -60,7 +66,7 @@ class VisitNote:
     method: Method = Method.UNKNOWN
     plus_letters: List[int] = field(default_factory=list)
     extracted_value: str = ""
-    snellen_equivalent: Optional[Tuple[int, int]] = None
+    snellen_equivalent: Optional[SnellenEquivalent] = None
     log_mar_base: Optional[float] = None
 
     def raise_errors(self):

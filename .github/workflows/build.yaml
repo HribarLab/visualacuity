@@ -162,13 +162,12 @@ jobs:
           path: dist
 
       - name: "Install wheel"
-        run: pip install visualacuity-preview --find-links dist --force-reinstall
+        run: pip install visualacuity-preview --find-links dist --force-reinstall --target=${{ env.VA_SRC_PYTHON }} --upgrade
 
       - name: "Test with pytest"
         run: |
           pip install pytest pytest-subtests pytest-cov
-          mv src/visualacuity-python/tests .
-          pytest tests --doctest-modules --junitxml=reports/python-test-report.xml # --cov=com --cov-report=xml --cov-report=html
+          pytest ${{ env.VA_SRC_PYTHON }}/tests --doctest-modules --junitxml=reports/python-test-report.xml # --cov=com --cov-report=xml --cov-report=html
   #      - name: "Test Report"
   #        if: success() || failure()
   #        uses: dorny/test-reporter@v1

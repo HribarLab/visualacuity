@@ -199,7 +199,7 @@ match {
     r#"20\s*/\s*(600|500|400|300|250|200|150|125|100|80|70|60|50|40|30|25|20|15)"# => _SnellenFraction,
     r#"20\s*/\s*(800|640|320|160|63|32|12|10)"# => _SnellenEquivalentFraction,
     r#"20\s*/\s*(2700|2000|1400|1000|670|540|360|270|180|130|89|66|45|33|23)"# => _TellerFraction,
-    r#"[Jj]\s*(29|28|27|26|25|24|23|22|21|20|19|18|17|16|15|14|13|12|11|10|9|8|7|6|5|4|3|2|1\+|1)"# => _JaegerRow,
+    r#"(?i)J\s*(1\+|\d+)"# => _JaegerRow,
     r#"[-+]\s*[1-6]"# => _PlusLetters,
 
     r#"(?i)card"# => _Card,
@@ -225,7 +225,7 @@ match {
     r#"(?i)not"# => _Not,
 
     r#"(?i)ETDRS"# => _ETDRS,
-    r#"(?i)\d+\s*(letters|ltt?rs)"# => _NLetters,
+    r#"(?i)([0-8]?\d|9[0-5])\s*(letters|ltt?rs)"# => _NLetters,  // 0-95 letters
     r#"(?i)CF(at|@)?"# => _CountingFingers,
     r#"(?i)HM(at|@)?"# => _HandMotion,
     r#"(?i)LP(at|@)?"# => _LightPerception,
@@ -258,6 +258,7 @@ match {
     //    averts head
 } else {
     r#"[,]|\p{Letter}+|\p{Symbol}|\p{Punctuation}"# => OtherToken,
+    r#"20\s*/\s*\d+"# => _UnexpectedSnellen,  // Make sure 20/321 doesn't get scooped up by 20/32
     _ // catch-all
 }
 

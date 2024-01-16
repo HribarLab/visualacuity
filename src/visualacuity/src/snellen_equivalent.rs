@@ -14,7 +14,6 @@ impl<'a> SnellenEquivalent for ParsedItem<'a> {
             Snellen(row) => Ok((20, *row as u16)),
             Jaeger(row) => match row {
                 // https://www.healio.com/~/media/Files/Journals/General%20PDFs/JRS/JRSVACHART.ashx
-                J1PLUS => Ok((20, 16)),
                 J1 => Ok((20, 20)),
                 J2 => Ok((20, 25)),
                 J3 => Ok((20, 30)),

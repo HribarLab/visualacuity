@@ -54,7 +54,7 @@ impl<'a> VisitNote<'a> {
                 Jaeger { .. } => { acuity_items.push(item); methods.push(Method::Jaeger); }
                 Teller { .. } => { acuity_items.push(item); methods.push(Method::Teller); }
                 ETDRS { .. } => { acuity_items.push(item); methods.push(Method::ETDRS); }
-                LowVision { .. } => { acuity_items.push(item); }
+                LowVision { .. } => { acuity_items.push(item); methods.push(Method::LowVision);  }
                 PinHoleEffectItem { .. } => { other_observations.push(item); }
                 BinocularFixation(_) => { other_observations.push(item); }
                 NotTakenItem(_) => { other_observations.push(item); }
@@ -82,7 +82,13 @@ impl<'a> VisitNote<'a> {
             acuity_item => acuity_item,
         };
 
-        let (extracted_value, snellen_equivalent, log_mar_base, log_mar_base_plus_letters, method) = match base_item {
+        let (
+            extracted_value,
+            snellen_equivalent,
+            log_mar_base,
+            log_mar_base_plus_letters,
+            method
+        ) = match base_item {
             Ok(Some(value)) => (
                 extract_value(&value),
                 Ok(value.snellen_equivalent().ok()), // Error here is just NoSnellenEquivalent.
@@ -121,7 +127,7 @@ impl<'a> VisitNote<'a> {
 fn extract_value(item: &ParsedItem) -> String {
     match item {
         Snellen(row) => format!("20/{}", *row as u16),
-        Jaeger(row) => format!("{row:?}"),
+        Jaeger(row) => format!("{row:?}").replace("PLUS", "+"),
         ETDRS{letters} => format!("{letters} letters"),
         PinHoleItem(effect) => format!("{effect:?}"),
         Teller { card, .. } => format!("card {card:?}"),

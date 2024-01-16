@@ -2,10 +2,20 @@
 
 This software is available under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for more info.
 
+### How it works
+
+Much of the behavior for `visualacuity` is documented in the following spreadsheets, (which are also used for testing 
+the software):
+
+* [`testing/test_cases_conversions.tsv`](testing/test_cases_conversions.tsv) demonstrates how the various methods of
+  visual acuity measurements are converted into Snellen equivalents and LogMAR values. 
+* [`testing/test_cases_parsing.tsv`](testing/test_cases_parsing.tsv) expresses the rules and limitations of converting
+  plain-text values into structured objects
+
 ### Installation
 
 ```bash
-pip install -i https://test.pypi.org/simple/ visualacuity-preview==0.1.0a1
+pip install -i https://test.pypi.org/simple/ visualacuity-preview
 ```
 
 ### Example Usage

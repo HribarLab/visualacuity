@@ -66,6 +66,9 @@ mod tests {
     #[test_case("20/987", Ok(vec![
         Text("20/987"),
     ]))]
+    #[test_case("20/321", Ok(vec![
+        Text("20/321"),
+    ]); "Make sure 20/321 doesn't get scooped up by 20/32")]
     fn test_fractions_with_plus_letters(chart_note: &str, expected: Result<Vec<ParsedItem>, ()>) {
         assert_eq!(CHART_NOTES_PARSER.parse(chart_note).map_err(|_| ()), expected.map(|e| ParsedItemCollection(e)));
     }
@@ -73,6 +76,7 @@ mod tests {
     #[test_case("J1", Ok(Jaeger(J1)))]
     #[test_case("J1+", Ok(Jaeger(J1PLUS)))]
     #[test_case("J29", Ok(Jaeger(J29)))]
+    #[test_case("J0", Ok(Jaeger(J1PLUS)))]
     fn test_jaeger(chart_note: &str, expected: Result<ParsedItem, ()>) {
         assert_eq!(JAEGER_PARSER.parse(chart_note).map_err(|_| ()), expected);
     }
@@ -413,6 +417,10 @@ mod tests {
     #[test_case(
         vec![("", "20/20 ETDRS 83 letters")],
         Ok(HashMap::from([("", Method::ETDRS)]))
+    )]
+    #[test_case(
+        vec![("", "CF at 8 feet to 20/400")],
+        Ok(HashMap::from([("", Method::Error(MultipleValues(format!("[LowVision, Snellen]"))))]))
     )]
     fn test_method(
         visit_notes: Vec<(&str, &str)>,
