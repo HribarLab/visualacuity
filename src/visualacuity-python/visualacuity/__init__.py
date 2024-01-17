@@ -6,7 +6,6 @@ from visualacuity._types import (
     Correction,
     Method,
     PinHole,
-    SnellenEquivalent
 )
 from visualacuity._parse import (
     parse_visit,

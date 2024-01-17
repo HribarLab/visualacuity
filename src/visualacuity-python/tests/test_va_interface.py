@@ -20,6 +20,7 @@ class TestVAInterface(unittest.TestCase):
                     plus_letters=[-1],
                     snellen_equivalent=(20, 30),
                     log_mar_base=0.17609125905568127,
+                    log_mar_base_plus_letters=0.20107900637734125,
                 )}
             ),
             (
@@ -33,6 +34,7 @@ class TestVAInterface(unittest.TestCase):
                     extracted_value="20/20",
                     snellen_equivalent=(20, 20),
                     log_mar_base=0.0,
+                    log_mar_base_plus_letters=-0.041646245536099975,
                 )}
             ),
             (
@@ -55,6 +57,7 @@ class TestVAInterface(unittest.TestCase):
                         extracted_value="20/20",
                         snellen_equivalent=(20, 20),
                         log_mar_base=0.0,
+                        log_mar_base_plus_letters=0.03230333766935214,
                     ),
                     "Both Eyes Distance SC": VisitNote(
                         laterality=OU,
@@ -65,6 +68,7 @@ class TestVAInterface(unittest.TestCase):
                         extracted_value="20/20",
                         snellen_equivalent=(20, 20),
                         log_mar_base=0.0,
+                        log_mar_base_plus_letters=0.01615166883467607,
                     ),
                     "Both Eyes Near CC": VisitNote(
                         laterality=OU,
@@ -74,6 +78,7 @@ class TestVAInterface(unittest.TestCase):
                         extracted_value="J2",
                         snellen_equivalent=(20, 25),
                         log_mar_base=0.09691001300805639,
+                        log_mar_base_plus_letters=0.09691001300805639,
                     )
                 }
             ),
@@ -87,4 +92,4 @@ class TestVAInterface(unittest.TestCase):
                     key: dataclasses.replace(expected[key], text=val.text, text_plus=val.text_plus)
                     for key, val in actual.items()
                 }
-                self.assertEqual(actual, expected)
+                self.assertEqual(str(actual), str(expected))

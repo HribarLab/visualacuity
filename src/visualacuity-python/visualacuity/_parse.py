@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Dict
 
-from visualacuity import Laterality, DistanceOfMeasurement, Correction, Method, PinHole, SnellenEquivalent
+from visualacuity import Laterality, DistanceOfMeasurement, Correction, Method, PinHole
 from . import _lib, VisitNote
 
 PARSER = _lib.Parser()
@@ -20,8 +20,9 @@ def parse_visit(notes: Dict[str, str]) -> Dict[str, VisitNote]:
                 method=_convert_enum(val.method),
                 plus_letters=val.plus_letters,
                 extracted_value=val.extracted_value,
-                snellen_equivalent=_try_get_attr(val, "snellen_equivalent", SnellenEquivalent),
+                snellen_equivalent=_try_get_attr(val, "snellen_equivalent"),
                 log_mar_base=_try_get_attr(val, "log_mar_base"),
+                log_mar_base_plus_letters=_try_get_attr(val, "log_mar_base_plus_letters"),
             )
             for key, val in PARSER.parse_visit(notes).items()
         }

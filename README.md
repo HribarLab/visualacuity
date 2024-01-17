@@ -41,7 +41,8 @@ assert parsed == {
         correction=SC,
         method=SNELLEN,
         snellen_equivalent=(20, 30),
-        log_mar_base=0.17609125905568127
+        log_mar_base=0.17609125905568127,
+        log_mar_base_plus_letters=0.20107900637734125
     ),
     "Right Eye Near CC": VisitNote(
         text="J5",
@@ -51,7 +52,8 @@ assert parsed == {
         correction=CC,
         method=JAEGER,
         snellen_equivalent=(20, 40),
-        log_mar_base=0.3010299956639812
+        log_mar_base=0.3010299956639812,
+        log_mar_base_plus_letters=0.3010299956639812,
     ),
 }
 
@@ -66,7 +68,7 @@ visit_data = {
 parsed = visualacuity.parse_visit(visit_data)
 
 assert parsed == {
-    "Both Eyes Distance CC": VisitNote(
+    "Both Eyes Near CC": VisitNote(
         text="20/20",
         text_plus="+2",
         laterality=OU,
@@ -77,6 +79,7 @@ assert parsed == {
         extracted_value="20/20",
         snellen_equivalent=(20, 20),
         log_mar_base=0.0,
+        log_mar_base_plus_letters=-0.041646245536099975
     )
 }
 
