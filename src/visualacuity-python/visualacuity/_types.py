@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Dict
 
 
 class _ConciseEnumRepr:
@@ -71,6 +71,24 @@ class VisitNote:
         ]
         if any(errors):
             raise ValueError(f"Notes had errors: {tuple(e.value for e in errors)}")
+
+
+class Visit(Dict[str, VisitNote]):
+    """
+    A dictionary of `{str: VisitNote}` with some added convenience methods.
+    """
+
+    def min(self) -> VisitNote:
+        """ The `VisitNote` with the minimum visual acuity value. """
+        return self[min(self, key=self._compare_key)]
+
+    def max(self) -> VisitNote:
+        """ The `VisitNote` with the maximum visual acuity value. """
+        return self[max(self, key=self._compare_key)]
+
+    def _compare_key(self, key):
+        value = self[key].log_mar_base_plus_letters
+        return value if isinstance(value, float) else float("nan")
 
 
 ERRORS = {Laterality.ERROR, DistanceOfMeasurement.ERROR, Correction.ERROR, Method.ERROR, PinHole.ERROR}

@@ -247,7 +247,7 @@ pub enum NotTakenReason {
 }
 
 #[derive(Hash, Clone, Debug, PartialEq, Eq)]
-pub enum ParsedItem<'input> {
+pub enum ParsedItem {
     Snellen(SnellenRow),
     Jaeger(JaegerRow),
     Teller { row: u16, card: u16 },
@@ -265,11 +265,29 @@ pub enum ParsedItem<'input> {
     PinHoleItem(PinHole),
 
     // Comment { text: String },
-    Text(&'input str),  // text that isn't really part of a structured VA
+    Text(String),  // text that isn't really part of a structured VA
     Unhandled(String),
 }
 
-impl ParsedItem<'_> {
+impl Display for ParsedItem {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let formatted = match self {
+            Snellen(row) => format!("20/{}", *row as u16),
+            Jaeger(row) => format!("{row:?}").replace("PLUS", "+"),
+            ETDRS{letters} => format!("{letters} letters"),
+            PinHoleItem(effect) => format!("{effect:?}"),
+            Teller { card, .. } => format!("card {card:?}"),
+            LowVision { method, .. } => format!("{method:?}"),
+            PinHoleEffectItem(effect) => format!("{effect:?}"),
+            BinocularFixation(preference) => format!("{preference:?}"),
+            NotTakenItem(reason) => format!("{reason:?}"),
+            _ => format!(""),
+        };
+        write!(f, "{formatted}")
+    }
+}
+
+impl ParsedItem {
     pub(crate) fn is_base(&self) -> bool {
         match self {
             &Snellen { .. }
@@ -282,18 +300,16 @@ impl ParsedItem<'_> {
     }
 }
 
-#[derive(IntoIterator, PartialEq, Clone, Debug)]
-pub struct ParsedItemCollection<'a>(pub(crate) Vec<ParsedItem<'a>>);
+#[derive(IntoIterator, PartialEq, Clone, Debug, Default)]
+pub struct ParsedItemCollection(Vec<ParsedItem>);
 
-impl<'a> ParsedItemCollection<'a> {
-    pub fn iter(&self) -> Iter<'_, ParsedItem<'a>> {
-        self.0.iter()
-    }
+impl ParsedItemCollection {
 
+    pub fn iter(&self) -> Iter<'_, ParsedItem> { self.0.iter() }
     pub fn len(&self) -> usize { self.0.len() }
 
     fn get_one<T, F>(&self, f: F) -> VisualAcuityResult<T>
-        where T: Clone + Debug, F: FnMut(&ParsedItem<'a>) -> Option<T>
+        where T: Clone + Debug, F: FnMut(&ParsedItem) -> Option<T>
     {
         Ok(self.iter().filter_map(f).exactly_one()?.into())
     }
@@ -326,8 +342,8 @@ impl<'a> ParsedItemCollection<'a> {
         }).collect()
     }
 
-    pub fn base_acuity(&self) -> VisualAcuityResult<ParsedItem<'a>> {
-        fn match_base_item<'b>(item: &ParsedItem<'b>) -> Option<ParsedItem<'b>> {
+    pub fn base_acuity(&self) -> VisualAcuityResult<ParsedItem> {
+        fn match_base_item<'b>(item: &ParsedItem) -> Option<ParsedItem> {
             if item.is_base() { Some(item.clone()) } else { None }
         }
         self.get_one(match_base_item)
@@ -342,6 +358,12 @@ impl<'a> ParsedItemCollection<'a> {
             LowVision { .. } => Some(Method::LowVision),
             _ => None
         }).unwrap_or(Method::Unknown)
+    }
+}
+
+impl FromIterator<ParsedItem> for ParsedItemCollection {
+    fn from_iter<I: IntoIterator<Item=ParsedItem>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
     }
 }
 
@@ -367,8 +389,8 @@ pub enum DistanceOfMeasurement {
 pub(crate) trait Disambiguate where Self: Default + Clone + Eq + Hash  {
     fn on_conflict<I: Iterator<Item=Self>>(e: ExactlyOneError<I>) -> Self;
 
-    fn disambiguate<I: IntoIterator<Item=Self>>(iter: I) -> Self {
-        match iter.into_iter().unique().at_most_one() {
+    fn disambiguate<I: IntoIterator<Item=Self> + Clone>(iter: &I) -> Self {
+        match iter.clone().into_iter().unique().at_most_one() {
             Ok(Some(item)) => item,
             Ok(None) => Self::default(),
             Err(e) => Self::on_conflict(e)
@@ -436,4 +458,20 @@ pub enum Method {
     PinHole,
     Binocular,
     NotTaken,
+}
+
+impl From<ParsedItem> for Method {
+    fn from(value: ParsedItem) -> Self {
+        match value {
+            Snellen { .. } => Method::Snellen,
+            Jaeger { .. } => Method::Jaeger,
+            Teller { .. } => Method::Teller,
+            ETDRS { .. } => Method::ETDRS,
+            LowVision { .. } => Method::LowVision,
+            PinHoleEffectItem(_) => Method::PinHole,
+            BinocularFixation(_) => Method::Binocular,
+            NotTakenItem(_) => Method::NotTaken,
+            _ => Method::Unknown,
+        }
+    }
 }

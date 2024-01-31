@@ -28,11 +28,11 @@ NumberFraction: f64 = {
     <b:Integer> "1/2" => (b as f64) + 0.5,
 }
 
-pub ChartNotes: ParsedItemCollection<'input> = {
-    Input<VA>+ => ParsedItemCollection(merge_consecutive_texts(<>))
+pub ChartNotes: ParsedItemCollection = {
+    Input<VA>+ => merge_consecutive_texts(<>)
 }
 
-VA: ParsedItem<'input> = {
+VA: ParsedItem = {
     Snellen,
     Jaeger,
     Teller,
@@ -45,7 +45,7 @@ VA: ParsedItem<'input> = {
     Input<!> => handle_error(<>)
 }
 
-pub(crate) Snellen: ParsedItem<'input> = {
+pub(crate) Snellen: ParsedItem = {
     <SnellenFraction> => Snellen(<>.1)
 };
 
@@ -54,7 +54,7 @@ pub(crate) SnellenFraction: (SnellenRow, SnellenRow) = {
     _SnellenEquivalentFraction => extract_integers(<>).unwrap(),
 };
 
-pub(crate) Jaeger: ParsedItem<'input> = {
+pub(crate) Jaeger: ParsedItem = {
     <row:JaegerRow> => Jaeger(row),
 };
 
@@ -62,7 +62,7 @@ pub(crate) JaegerRow: JaegerRow = {
     _JaegerRow =>? <>.parse().map_err(|_| User{error: "Invalid Jaeger Row"})
 };
 
-pub(crate) Teller: ParsedItem<'input> = {
+pub(crate) Teller: ParsedItem = {
     <f:TellerFraction> <cy_cm:TellerCyCm?> <card:TellerCardNumber?> => match (f, cy_cm, card) {
         ((_, row), _, Some(card)) => Teller{ row, card },
         ((_, row), _, _) => Teller{ row, card: 0 }
@@ -81,7 +81,7 @@ pub(crate) TellerCardNumber: u16 = {
     _Card <n:Integer> => n as u16
 };
 
-pub(crate) ETDRS: ParsedItem<'input> = {
+pub(crate) ETDRS: ParsedItem = {
     _ETDRS? <letters:NLetters> => ETDRS{letters},
 };
 
@@ -89,7 +89,7 @@ NLetters: u32 = {
     _NLetters => { let (n, ) = extract_integers(<>).unwrap(); n }
 };
 
-pub(crate) LowVision: ParsedItem<'input> = {
+pub(crate) LowVision: ParsedItem = {
     _CountingFingers <distance:AtDistance?> => LowVision{method: CountingFingers, distance: distance.flatten() },
     _HandMotion <distance:AtDistance?> => LowVision{method: HandMovement, distance: distance.flatten() },
     _LightPerception <distance:AtDistance?> => LowVision{method: LightPerception, distance: distance.flatten() },
@@ -104,7 +104,7 @@ SensitiveToLight: () = {
     _Sensitive _ToLight => (),
 };
 
-BinocularFixation: ParsedItem<'input> = {
+BinocularFixation: ParsedItem = {
     BinocularFixationPreference => BinocularFixation(<>),
 };
 
@@ -128,7 +128,7 @@ BinocularFixationPreference: FixationPreference = {
     _Holds => Holds,
 };
 
-NotTaken: ParsedItem<'input> = {
+NotTaken: ParsedItem = {
     _NT => NotTakenItem(NotTakenReason::NT),
     _Refused => NotTakenItem(NotTakenReason::Refused),
     _Unable => NotTakenItem(NotTakenReason::Unable),
@@ -137,7 +137,7 @@ NotTaken: ParsedItem<'input> = {
     _SeeMR => NotTakenItem(NotTakenReason::SeeMR),
 };
 
-pub(crate) PlusLetters: ParsedItem<'input> = {
+pub(crate) PlusLetters: ParsedItem = {
     _PlusLetters => PlusLettersItem(<>.replace(&[' ', '+'], "").parse().unwrap())
 }
 
@@ -155,30 +155,30 @@ pub(crate) AtDistance: Option<DistanceOfMeasurement> = {
     _At? OtherToken => None,  // Discarding the messy stuff for now
 };
 
-pub(crate) VisitInfo: ParsedItem<'input> = {
+pub(crate) VisitInfo: ParsedItem = {
     VisitDistance,
     VisitEye,
     VisitCorrection,
     VisitPinHole,
 };
 
-VisitDistance: ParsedItem<'input> = {
+VisitDistance: ParsedItem = {
     _Near => DistanceItem(Near),
     _Distance => DistanceItem(Distance),
 };
 
-VisitEye: ParsedItem<'input> = {
+VisitEye: ParsedItem = {
     _OS => LateralityItem(OS),
     _OD => LateralityItem(OD),
     _OU => LateralityItem(OU),
 };
 
-VisitCorrection: ParsedItem<'input> = {
+VisitCorrection: ParsedItem = {
     _SC => CorrectionItem(SC),
     _CC => CorrectionItem(CC),
 }
 
-VisitPinHole: ParsedItem<'input> = {
+VisitPinHole: ParsedItem = {
     _PinHole => PinHoleItem(crate::PinHole::With),
 }
 

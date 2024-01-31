@@ -1,5 +1,6 @@
 from visualacuity import _lib
 from visualacuity._types import (
+    Visit,
     VisitNote,
     Laterality,
     DistanceOfMeasurement,

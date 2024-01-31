@@ -59,7 +59,7 @@ impl VisitNote {
     }
 }
 
-impl From<visualacuity::VisitNote<'_>> for VisitNote {
+impl From<visualacuity::VisitNote> for VisitNote {
     fn from(value: visualacuity::VisitNote) -> Self {
         Self {
             text: value.text.to_string(),

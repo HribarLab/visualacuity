@@ -18,11 +18,14 @@ pub enum VisualAcuityError {
     MultipleErrors(Vec<VisualAcuityError>),
 }
 
-
 impl From<ParseIntError> for VisualAcuityError {
     fn from(value: ParseIntError) -> Self {
         VisualAcuityError::ParseError(format!("{value:?}"))
     }
+}
+
+impl<T: Clone + Into<VisualAcuityError>> From<&T> for VisualAcuityError {
+    fn from(value: &T) -> Self { value.clone().into() }
 }
 
 impl<I: Iterator<Item=T>, T: Debug> From<ExactlyOneError<I>> for VisualAcuityError {

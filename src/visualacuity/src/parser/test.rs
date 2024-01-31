@@ -1,30 +1,29 @@
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
     use lazy_static::lazy_static;
+    use test_case::test_case;
+
+    use crate::*;
     use crate::JaegerRow::*;
     use crate::SnellenRow::*;
     use crate::ParsedItem::*;
     use crate::LowVisionMethod::*;
-    use crate::parser::*;
-    use crate::{Parser, ParsedItem, ParsedItemCollection, VisualAcuityResult, PinHoleEffect,
-                VisitNote, Laterality, DistanceOfMeasurement, Correction};
     use crate::FixationPreference::*;
-    use crate::VisualAcuityError::{*};
-
-    use test_case::test_case;
+    use crate::VisualAcuityError::*;
     use crate::structure::Correction::*;
     use crate::structure::DistanceOfMeasurement::*;
     use crate::structure::Laterality::*;
-    use crate::structure::{Method, PinHole};
-    use crate::visit::{merge_plus_columns, Visit};
+    use crate::structure::*;
+    use crate::visit::*;
+    use crate::visitinput::*;
+    use crate::parser::grammar::*;
 
     lazy_static!{
-    static ref PARSER: Parser = Parser::new();
-    static ref CHART_NOTES_PARSER: grammar::ChartNotesParser = grammar::ChartNotesParser::new();
-    static ref PLUS_LETTERS_PARSER: grammar::PlusLettersParser = grammar::PlusLettersParser::new();
-    static ref JAEGER_PARSER: grammar::JaegerParser = grammar::JaegerParser::new();
-    static ref AT_DISTANCE_PARSER: grammar::AtDistanceParser = grammar::AtDistanceParser::new();
+    static ref CHART_NOTES_PARSER: ChartNotesParser = ChartNotesParser::new();
+    static ref PLUS_LETTERS_PARSER: PlusLettersParser = PlusLettersParser::new();
+    static ref JAEGER_PARSER: JaegerParser = JaegerParser::new();
+    static ref AT_DISTANCE_PARSER: AtDistanceParser = AtDistanceParser::new();
     }
 
     fn parse_notes(notes: &'static str) -> VisualAcuityResult<Vec<ParsedItem>> {
@@ -64,13 +63,14 @@ mod tests {
         PlusLettersItem(6),
     ]))]
     #[test_case("20/987", Ok(vec![
-        Text("20/987"),
+        Text("20/987".to_string()),
     ]))]
     #[test_case("20/321", Ok(vec![
-        Text("20/321"),
+        Text("20/321".to_string()),
     ]); "Make sure 20/321 doesn't get scooped up by 20/32")]
     fn test_fractions_with_plus_letters(chart_note: &str, expected: Result<Vec<ParsedItem>, ()>) {
-        assert_eq!(CHART_NOTES_PARSER.parse(chart_note).map_err(|_| ()), expected.map(|e| ParsedItemCollection(e)));
+        let expected = expected.map(|e| e.into_iter().collect());
+        assert_eq!(CHART_NOTES_PARSER.parse(chart_note).map_err(|_| ()), expected);
     }
 
     #[test_case("J1", Ok(Jaeger(J1)))]
@@ -97,7 +97,8 @@ mod tests {
     // #[test_case("No BTL", Ok(vec![LowVision { method: NoLightPerception, distance: None }]))]
     #[test_case("CSM", Ok(vec![BinocularFixation(CSM)]))]
     fn test_alternative_visual_acuity(chart_note: &str, expected: Result<Vec<ParsedItem>, ()>) {
-        assert_eq!(CHART_NOTES_PARSER.parse(chart_note).map_err(|_| ()), expected.map(|e| ParsedItemCollection(e)));
+        let expected = expected.map(|e| e.into_iter().collect());
+        assert_eq!(CHART_NOTES_PARSER.parse(chart_note).map_err(|_| ()), expected);
     }
 
     #[test_case("20/20 +1 -3", Ok(vec![
@@ -106,10 +107,10 @@ mod tests {
         PlusLettersItem(-3),
     ]))]
     #[test_case("ok", Ok(vec![
-        Text("ok"),
+        Text("ok".to_string()),
     ]))]
     #[test_case("ok 20/20 +1 -3", Ok(vec![
-        Text("ok"),
+        Text("ok".to_string()),
         Snellen(S20),
         PlusLettersItem(1),
         PlusLettersItem(-3),
@@ -118,16 +119,16 @@ mod tests {
         Snellen(S20),
         PlusLettersItem(1),
         PlusLettersItem(-3),
-        Text("asdf"),
+        Text("asdf".to_string()),
     ]))]
     #[test_case("20/20 +1 -3 asdf qwerty", Ok(vec![
         Snellen(S20),
         PlusLettersItem(1),
         PlusLettersItem(-3),
-        Text("asdf qwerty"),
+        Text("asdf qwerty".to_string()),
     ]))]
     #[test_case("12/20 +1 -3", Ok(vec![
-        Text("12/20"),
+        Text("12/20".to_string()),
         PlusLettersItem(1),
         PlusLettersItem(-3),
     ]))]
@@ -181,7 +182,7 @@ mod tests {
     ]))]
     #[test_case("CSM, good f+f", Ok(vec![
         BinocularFixation(CSM),
-        Text("good"),
+        Text("good".to_string()),
         BinocularFixation(FixAndFollow),
     ]))]
     fn test_fix_and_follow(chart_note: &'static str, expected: Result<Vec<ParsedItem>, ()>) {
@@ -205,9 +206,10 @@ mod tests {
         plus: &str,
         expected: (ParsedItem, Vec<i32>)
     ) -> Result<(), anyhow::Error> {
-        let parsed_notes = PARSER.parse_notes(notes);
-        let parsed_plus = PARSER.parse_notes(plus);
-        let combined = ParsedItemCollection(parsed_notes.into_iter().chain(parsed_plus).collect());
+        let parser = Parser::new();
+        let parsed_notes = parser.parse_text(notes);
+        let parsed_plus = parser.parse_text(plus);
+        let combined: ParsedItemCollection = [parsed_notes, parsed_plus].into_iter().flatten().collect();
         let base_item = combined.base_acuity()?;
         let plus_letters = combined.plus_letters();
         assert_eq!((base_item, plus_letters), expected);
@@ -223,8 +225,10 @@ mod tests {
         notes: &str,
         expected: VisualAcuityResult<Vec<ParsedItem>>
     ) -> Result<(), anyhow::Error> {
-        let actual = PARSER.parse_notes(notes);
-        assert_eq!(Ok(actual), expected.map(|e| ParsedItemCollection(e)));
+        let parser = Parser::new();
+        let actual = parser.parse_text(notes);
+        let expected = expected.map(|e| e.into_iter().collect())?;
+        assert_eq!(actual, expected);
         Ok(())
     }
 
@@ -260,8 +264,9 @@ mod tests {
         notes: &str,
         expected: VisualAcuityResult<Option<f64>>
     ) -> Result<(), anyhow::Error> {
-        let visit_notes = HashMap::from([("fieldname", notes)]);
-        let parsed_notes = PARSER.parse_visit(visit_notes);
+        let parser = Parser::new();
+        let visit_notes = [("fieldname", notes)].into();
+        let parsed_notes = parser.parse_visit(visit_notes);
         let base_item = parsed_notes?.into_iter().map(|(_, v)| v).next().expect("");
         let approx = |x| Some(format!("{:.8}", x?));
         assert_eq!(base_item.log_mar_base.map(approx), expected.map(approx));
@@ -269,14 +274,14 @@ mod tests {
     }
 
     #[test_case(
-        vec![
+        [
             ("Both Eyes Distance CC", "20/20"),
             ("Both Eyes Distance CC +/-", "-2"),
         ],
-        Ok(Visit(HashMap::from([
-            (("Both Eyes Distance CC"), VisitNote {
-                text: "20/20",
-                text_plus: "-2",
+        Ok([
+            (("Both Eyes Distance CC".to_string()), VisitNote {
+                text: "20/20".to_string(),
+                text_plus: "-2".to_string(),
                 laterality: Laterality::OU,
                 distance_of_measurement: DistanceOfMeasurement::Distance,
                 correction: Correction::CC,
@@ -288,16 +293,16 @@ mod tests {
                 log_mar_base: Ok(Some(0.0)),
                 log_mar_base_plus_letters: Ok(Some(0.03230333766935214)),
             }),
-        ])))
+        ])
     )]
     #[test_case(
-        vec![
+        [
             ("Visual Acuity Right Eye Distance CC", "20/100-1+2 ETDRS  (sc eccentric fixation)"),
         ],
-        Ok(Visit(HashMap::from([
-            ("Visual Acuity Right Eye Distance CC", VisitNote {
-                text: "20/100-1+2 ETDRS  (sc eccentric fixation)",
-                text_plus: "",
+        Ok([
+            ("Visual Acuity Right Eye Distance CC".to_string(), VisitNote {
+                text: "20/100-1+2 ETDRS  (sc eccentric fixation)".to_string(),
+                text_plus: "".to_string(),
                 laterality: Laterality::OD,
                 distance_of_measurement: DistanceOfMeasurement::Distance,
                 correction: Correction::Error(MultipleValues(format!("[CC, SC]"))),
@@ -309,17 +314,17 @@ mod tests {
                 log_mar_base: Ok(Some(0.6989700043360187)),
                 log_mar_base_plus_letters: Ok(Some(0.6828183355013427)),
             })
-        ])))
+        ])
         ; "Handling ambiguous Methods"
     )]
     #[test_case(
-        vec![
+        [
             ("Visual Acuity Right Eye Distance CC", "20/20 J5"),
         ],
-        Ok(Visit(HashMap::from([
-            ("Visual Acuity Right Eye Distance CC", VisitNote {
-                text: "20/20 J5",
-                text_plus: "",
+        Ok([
+            ("Visual Acuity Right Eye Distance CC".to_string(), VisitNote {
+                text: "20/20 J5".to_string(),
+                text_plus: "".to_string(),
                 laterality: Laterality::OD,
                 distance_of_measurement: DistanceOfMeasurement::Distance,
                 correction: Correction::CC,
@@ -331,55 +336,54 @@ mod tests {
                 log_mar_base: Err(MultipleValues(format!("[Snellen(S20), Jaeger(J5)]"))),
                 log_mar_base_plus_letters: Err(MultipleValues(format!("[Snellen(S20), Jaeger(J5)]"))),
             })
-        ])))
+        ])
         ; "Handling ambiguous Correction values"
     )]
-    fn test_visit(
-        visit_notes: Vec<(&str, &str)>,
-        expected: VisualAcuityResult<Visit>
-    ) {
-        let visit_notes = visit_notes.into_iter().collect();
-        let actual = PARSER.parse_visit(visit_notes);
+    fn test_visit<'a, I, E>(
+        visit_notes: I,
+        expected: VisualAcuityResult<E>
+    ) where I: Into<VisitInput>, E: Into<BTreeMap<String, VisitNote>> {
+        let expected = expected.map(|v| Visit(v.into()));
+        let parser = Parser::new();
+        let visit_notes = visit_notes.into();
+        let actual = parser.parse_visit(visit_notes);
         assert_eq!(actual, expected);
     }
 
     #[test_case(
-        vec![("", "NI")],
-        Ok(HashMap::from([("", format!("NI"))]))
+        [("", "NI")],
+        Ok([("", "NI")])
     )]
     #[test_case(
-        vec![("", "NT")],
-        Ok(HashMap::from([("", format!("NT"))]))
+        [("", "NT")],
+        Ok([("", "NT")])
     )]
     #[test_case(
-        vec![("", "unable")],
-        Ok(HashMap::from([("", format!("Unable"))]))
+        [("", "unable")],
+        Ok([("", "Unable")])
     )]
     #[test_case(
-        vec![("", "prosthesis")],
-        Ok(HashMap::from([("", format!("Prosthesis"))]))
+        [("", "prosthesis")],
+        Ok([("", "Prosthesis")])
     )]
     #[test_case(
-        vec![("", "CF 2'")],
-        Ok(HashMap::from([("", format!("CountingFingers"))]))
+        [("", "CF 2'")],
+        Ok([("", "CountingFingers")])
     )]
     #[test_case(
-        vec![("", "CF at 8 feet to 20/400")],
-        Ok(HashMap::from([("", format!("Error"))]))
+        [("", "CF at 8 feet to 20/400")],
+        Ok([("", "Error")])
     )]
-    fn test_extracted_value(
-        visit_notes: Vec<(&str, &str)>,
-        expected: VisualAcuityResult<HashMap<&str, String>>
-    ) {
-        let visit_notes = visit_notes.into_iter().collect();
-        let actual = PARSER.parse_visit(visit_notes)
+    fn test_extracted_value<T: Into<VisitInput>>(visit_notes: T, expected: VisualAcuityResult<T>) {
+        let parser = Parser::new();
+        let expected = expected.map(|exp| exp.into());
+        let actual = parser.parse_visit(visit_notes.into())
             .map(|visit| {
                 visit.into_iter()
                     .map(|(key, note)| (key, note.extracted_value))
-                    .collect()
+                    .into()
             });
-
-        assert_eq!(actual, expected);
+        assert_eq!(actual, expected)
     }
 
     #[test_case("20/20",  Ok(Some((20, 20))))]
@@ -398,12 +402,13 @@ mod tests {
         text: &str,
         expected: VisualAcuityResult<Option<(u16, u16)>>
     ) -> Result<(), anyhow::Error> {
-        let visit_notes = HashMap::from([("", text)]);
-        let parsed = PARSER.parse_visit(visit_notes)
+        let parser = Parser::new();
+        let visit_notes = BTreeMap::from([("", text)]);
+        let parsed = parser.parse_visit(visit_notes.into())
             .map(|visit| {
                 visit.into_iter()
                     .map(|(key, note)| match (key, note.snellen_equivalent) {
-                        (_, Err(MultipleValues(_))) => (key,  Err(MultipleValues(format!("")))),
+                        (k, Err(MultipleValues(_))) => (k,  Err(MultipleValues(format!("")))),
                         (k, v) => (k, v)
                     })
                     .collect::<HashMap<_, _>>()
@@ -426,67 +431,71 @@ mod tests {
         visit_notes: Vec<(&str, &str)>,
         expected: VisualAcuityResult<HashMap<&str, Method>>
     ) {
-        let visit_notes = visit_notes.into_iter().collect();
-        let actual = PARSER.parse_visit(visit_notes)
+        let parser = Parser::new();
+        let actual = parser.parse_visit(visit_notes.into())
             .map(|visit| {
                 visit.into_iter()
                     .map(|(key, note)| (key, note.method))
                     .collect()
             });
+        let expected = expected.map(|exp| exp.into_iter()
+            .map(|(key, note)| (String::from(key), note))
+            .collect::<BTreeMap<_, _>>()
+        );
 
         assert_eq!(actual, expected);
     }
 
     #[test_case(
-        HashMap::from([
-            ("Left Eye Distance SC", vec!["20/20"]),
-            ("Left Eye Distance SC Plus", vec!["-2"]),
-        ]),
-        HashMap::from([
-            ("Left Eye Distance SC", vec!["20/20", "-2"]),
-        ])
+        [
+            ("Left Eye Distance SC", "20/20"),
+            ("Left Eye Distance SC Plus", "-2"),
+        ],
+        [
+            ("Left Eye Distance SC", ("20/20", "-2")),
+        ]
     )]
     #[test_case(
-        HashMap::from([
-            ("Right Eye Distance CC", vec!["20/20"]),
-            ("Right Eye Distance CC +/-", vec!["-2"]),
-        ]),
-        HashMap::from([
-            ("Right Eye Distance CC", vec!["20/20", "-2"]),
-        ])
+        [
+            ("Right Eye Distance CC", "20/20"),
+            ("Right Eye Distance CC +/-", "-2"),
+        ],
+        [
+            ("Right Eye Distance CC", ("20/20", "-2")),
+        ]
     )]
     #[test_case(
-        HashMap::from([
-            ("Both Eyes Distance CC", vec!["20/20"]),
-            ("Both Eyes Distance CC +/-", vec!["-2"]),
-            ("Both Eyes Distance SC", vec!["20/20"]),
-            ("Both Eyes Distance SC Plus", vec!["-1"]),
-            ("Both Eyes Near CC", vec!["J1+"]),
-            ("Both Eyes Near CC asdf", vec!["J2"]),
-            ("Comments", vec!["Forgot glasses today"]),
-        ]),
-        HashMap::from([
-            ("Both Eyes Distance CC", vec!["20/20", "-2"]),
-            ("Both Eyes Distance SC", vec!["20/20", "-1"]),
-            ("Both Eyes Near CC", vec!["J1+"]),
-            ("Both Eyes Near CC asdf", vec!["J2"]),
-            ("Comments", vec!["Forgot glasses today"]),
-        ])
+        [
+            ("Both Eyes Distance CC", "20/20"),
+            ("Both Eyes Distance CC +/-", "-2"),
+            ("Both Eyes Distance SC", "20/20"),
+            ("Both Eyes Distance SC Plus", "-1"),
+            ("Both Eyes Near CC", "J1+"),
+            ("Both Eyes Near CC asdf", "J2"),
+            ("Comments", "Forgot glasses today"),
+        ],
+        [
+            ("Both Eyes Distance CC", ("20/20", "-2")),
+            ("Both Eyes Distance SC", ("20/20", "-1")),
+            ("Both Eyes Near CC", ("J1+", "")),
+            ("Both Eyes Near CC asdf", ("J2", "")),
+            ("Comments", ("Forgot glasses today", "")),
+        ]
     )]
     #[test_case(
-        HashMap::from([
-            ("Left Eye Distance SC Plus", vec!["-2"])
-        ]),
-        HashMap::from([
-            ("Left Eye Distance SC", vec!["-2"])
-        ]);
+        [
+            ("Left Eye Distance SC Plus", "-2")
+        ],
+        [
+            ("Left Eye Distance SC", ("", "-2"))
+        ];
         "Map even if the parent key isn't present"
     )]
-    fn test_merge_plus_columns(
-        notes: HashMap<&str, Vec<&str>>,
-        expected: HashMap<&str, Vec<&str>>
-    ) {
-        let actual = merge_plus_columns(notes);
-        assert_eq!(actual, expected)
+    fn test_merge_plus_columns<'a, I, E>(notes: I, expected: E)
+        where I: Into<VisitInput>, E: Into<VisitInputMerged>
+    {
+        let column_merger = ColumnMerger::new(1);
+        let actual = column_merger.merge_plus_columns(notes.into());
+        assert_eq!(actual, expected.into())
     }
 }

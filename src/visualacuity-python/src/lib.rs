@@ -2,7 +2,7 @@
 
 extern crate visualacuity;
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use pyo3;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -37,8 +37,8 @@ impl Parser {
         Ok(Self { parser })
     }
 
-    pub fn parse_visit(&self, notes: HashMap<&str, &str>) -> PyResult<HashMap<String, VisitNote>> {
-        match self.parser.parse_visit(notes) {
+    pub fn parse_visit(&self, notes: BTreeMap<&str, &str>) -> PyResult<BTreeMap<String, VisitNote>> {
+        match self.parser.parse_visit(notes.into()) {
             Ok(result) => Ok(result.into_iter().map(|(key, v)| (key.into(), v.into())).collect()),
             Err(e) => Err(PyValueError::new_err(format!("{:?}", e)))
         }

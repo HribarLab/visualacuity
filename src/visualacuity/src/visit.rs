@@ -1,187 +1,161 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use itertools::Itertools;
-use lazy_static::lazy_static;
-use regex::Regex;
 use derive_more::IntoIterator;
 use crate::{Correction, CorrectionItem, DistanceOfMeasurement, Laterality, ParsedItem, ParsedItemCollection, VisualAcuityResult};
 use crate::logmar::{LogMarBase, LogMarPlusLetters};
 use crate::ParsedItem::*;
 use crate::snellen_equivalent::SnellenEquivalent;
-use crate::structure::{Method, PinHole, Disambiguate};
+use crate::structure::{Disambiguate, Method, PinHole};
 
-
+/// The public return type representing a parsed & processed set of EHR notes for a patient visit
 #[derive(IntoIterator, PartialEq, Debug, Clone)]
-pub struct Visit<'input>(pub(crate) HashMap<&'input str, VisitNote<'input>>);
+pub struct Visit(pub(crate) BTreeMap<String, VisitNote>);
 
+/// The parsed & processed observations from an EHR field (with "plus" columns merged if possible)
 #[derive(PartialEq, Debug, Clone)]
-pub struct VisitNote<'input> {
-    pub text: &'input str,
-    pub text_plus: &'input str,
+pub struct VisitNote {
+    /// The contents of the original text field
+    pub text: String,
+    /// The contents of the associated "Plus" field, when available
+    pub text_plus: String,
 
+    /// The laterality (typically retrieved from the field name)
     pub laterality: Laterality,
+    /// The distance of measurement (typically retrieved from the field name)
     pub distance_of_measurement: DistanceOfMeasurement,
+    /// Whether correction was used (typically retrieved from the field name)
     pub correction: Correction,
+    /// Whether the observation involved pin-hole methods (typically retrieved from field name)
     pub pinhole: PinHole,
 
+    /// The method used during observation
     pub method: Method,
+    ///  When a patient reads a partial line, how many letters were indicated in the note  (+/-)
     pub plus_letters: Vec<i32>,
 
+    /// The "normalized" text describing the visual acuity observation
     pub extracted_value: String,
+    /// The Snellen equivalent of the visual acuity (if available), expressed as a fraction
     pub snellen_equivalent: VisualAcuityResult<Option<(u16, u16)>>,
+    /// The LogMAR equivalent of the visual acuity (if available), not considering partial lines
     pub log_mar_base: VisualAcuityResult<Option<f64>>,
+    /// The LogMAR equivalent of the visual acuity (if available), with consideration of partial lines
     pub log_mar_base_plus_letters: VisualAcuityResult<Option<f64>>,
 }
 
-impl<'a> VisitNote<'a> {
+impl VisitNote {
+    /// Given a variable length set of `ParsedItem`s, determine which items represent the visual
+    /// acuity measurements etc. The task here mostly has to do with prioritization/disambiguation.
     pub(crate) fn new(
-        text: &'a str,
-        text_plus: &'a str,
-        parsed_key: ParsedItemCollection<'a>,
-        parsed_notes: ParsedItemCollection<'a>,
+        text: String,
+        text_plus: String,
+        parsed_key: ParsedItemCollection,
+        parsed_notes: ParsedItemCollection,
     ) -> VisualAcuityResult<Self> {
-        let combined = ParsedItemCollection(parsed_key.into_iter().chain(parsed_notes.clone().into_iter()).collect());
-        let mut pinholes = vec![];
-        let mut acuity_items = vec![];
-        let mut other_observations = vec![];
-        let mut lateralities = vec![];
-        let mut distances = vec![];
-        let mut corrections = vec![];
-        let mut plus_letters = vec![];
-        let mut methods = vec![];
-        for item in combined.into_iter() {
-            match item {
-                Snellen { .. } => { acuity_items.push(item); methods.push(Method::Snellen); }
-                Jaeger { .. } => { acuity_items.push(item); methods.push(Method::Jaeger); }
-                Teller { .. } => { acuity_items.push(item); methods.push(Method::Teller); }
-                ETDRS { .. } => { acuity_items.push(item); methods.push(Method::ETDRS); }
-                LowVision { .. } => { acuity_items.push(item); methods.push(Method::LowVision);  }
-                PinHoleEffectItem { .. } => { other_observations.push(item); }
-                BinocularFixation(_) => { other_observations.push(item); }
-                NotTakenItem(_) => { other_observations.push(item); }
-                PlusLettersItem(value) => plus_letters.push(value),
-                DistanceItem(value) => distances.push(value),
-                LateralityItem(value) => lateralities.push(value),
-                CorrectionItem(value) => corrections.push(value),
-                PinHoleItem(value) => pinholes.push(value),
-                Text(_) => {}
-                Unhandled(_) => {}
-            }
-        }
+        let sifted = SiftedParsedItems::sift(parsed_key, parsed_notes);
 
-        let acuity_item = acuity_items.into_iter()
-            .rev()  // Take the *last* equivalent thing (e.g. ETDRS)
-            .unique_by(|acuity| acuity.snellen_equivalent())
-            .collect_vec() // Put it back in order
-            .into_iter()
-            .rev()
-            .at_most_one();
-
-        let base_item = match acuity_item {
-            // If no acuity is present, see if we have another kind of observation
-            Ok(None) => Ok(other_observations.into_iter().next()),
-            acuity_item => acuity_item,
-        };
-
-        let (
-            extracted_value,
-            snellen_equivalent,
-            log_mar_base,
-            log_mar_base_plus_letters,
-            method
-        ) = match base_item {
-            Ok(Some(value)) => (
-                extract_value(&value),
-                Ok(value.snellen_equivalent().ok()), // Error here is just NoSnellenEquivalent.
-                Ok(value.log_mar_base().ok()), // Error here is just NoSnellenEquivalent.
-                value.log_mar_plus_letters(&plus_letters).map(|s| Some(s)),
-                get_method(&value)
-            ),
-            Ok(None) => (
-                format!(""),
-                Ok(None),
-                Ok(None),
-                Ok(None),
-                Method::disambiguate(methods)
-            ),
-            Err(e) => (
-                format!("Error"),
-                Err(e.clone().into()),
-                Err(e.clone().into()),
-                Err(e.into()),
-                Method::disambiguate(methods)
-            )
-        };
-
-        let distance_of_measurement = DistanceOfMeasurement::disambiguate(distances);
-        let laterality = Laterality::disambiguate(lateralities);
-        let correction = Correction::disambiguate(corrections);
-        let pinhole = PinHole::disambiguate(pinholes);
+        let base_acuity = base_acuity(&sifted.acuities, &sifted.other_observations);
+        let log_mar_base = map_ok_some(&base_acuity, |v| v.log_mar_base());
+        let log_mar_base_plus_letters = map_ok_some(&base_acuity, |v| v.log_mar_plus_letters(&sifted.plus_letters));
+        let method = get_method(&base_acuity, &sifted.acuities);
+        let extracted_value = extract_value(&base_acuity);
+        let distance_of_measurement = DistanceOfMeasurement::disambiguate(&sifted.distances);
+        let correction = Correction::disambiguate(&sifted.corrections);
+        let pinhole = PinHole::disambiguate(&sifted.pinholes);
+        let laterality = Laterality::disambiguate(&sifted.lateralities);
+        let snellen_equivalent = map_ok_some(&base_acuity, |v| v.snellen_equivalent());
+        let plus_letters = sifted.plus_letters;
 
         Ok(VisitNote {
-            text, text_plus, distance_of_measurement, correction, pinhole, method, laterality,
-            plus_letters, extracted_value, snellen_equivalent, log_mar_base, log_mar_base_plus_letters
+            text, text_plus, extracted_value, distance_of_measurement, correction, pinhole,
+            laterality, plus_letters, method, snellen_equivalent, log_mar_base, log_mar_base_plus_letters
         })
     }
 }
 
-fn extract_value(item: &ParsedItem) -> String {
-    match item {
-        Snellen(row) => format!("20/{}", *row as u16),
-        Jaeger(row) => format!("{row:?}").replace("PLUS", "+"),
-        ETDRS{letters} => format!("{letters} letters"),
-        PinHoleItem(effect) => format!("{effect:?}"),
-        Teller { card, .. } => format!("card {card:?}"),
-        LowVision { method, .. } => format!("{method:?}"),
-        PinHoleEffectItem(effect) => format!("{effect:?}"),
-        BinocularFixation(preference) => format!("{preference:?}"),
-        NotTakenItem(reason) => format!("{reason:?}"),
-        _ => format!(""),
+/// Given `ParsedItem`s, determine which one reperesents a "base acuity." If none are present,
+/// consider "other observations" (e.g. binocular fixation) that might be the primary observation.
+fn base_acuity(acuities: &Vec<ParsedItem>, other_observations: &Vec<ParsedItem>) -> VisualAcuityResult<Option<ParsedItem>> {
+    let unique_acuities = acuities.iter()
+        .rev()  // Take the *last* equivalent thing (e.g. ETDRS)
+        .unique_by(|&acuity| acuity.snellen_equivalent())
+        .collect_vec();
+
+    let acuity_item = unique_acuities.into_iter()
+        .rev()
+        .at_most_one()?;
+
+    match acuity_item {
+        // If no acuity is present, see if we have another kind of observation
+        None => Ok(other_observations.first().cloned()),
+        acuity_item => Ok(acuity_item.cloned()),
     }
 }
 
-fn get_method(item: &ParsedItem) -> Method {
-    match item {
-        Snellen { .. } => Method::Snellen,
-        Jaeger { .. } => Method::Jaeger,
-        Teller { .. } => Method::Teller,
-        ETDRS { .. } => Method::ETDRS,
-        LowVision { .. } => Method::LowVision,
-        PinHoleEffectItem(_) => Method::PinHole,
-        BinocularFixation(_) => Method::Binocular,
-        NotTakenItem(_) => Method::NotTaken,
-        _ => Method::Unknown,
+// The `Ok(Some(value))` structure is pretty inconvenient, and should maybe be reconsidered, but
+// here's a convenience function to ease the pain a bit.
+fn map_ok_some<T, F>(base_acuity: &VisualAcuityResult<Option<ParsedItem>>, f: F) -> VisualAcuityResult<Option<T>>
+    where F: Fn (&ParsedItem) -> VisualAcuityResult<T>
+{
+    match base_acuity.as_ref()? {
+        Some(ref value) => Ok(Some(f(value)?)),
+        None => Ok(None)
     }
 }
 
-#[derive(PartialEq, Debug, Clone)]
-pub struct StandardizedVisualAcuity {
-    pub snellen_equivalent: (u16, u16),
-    pub log_mar: f64,
-    pub log_mar_base: f64,
-    pub log_mar_plus_letters: f64,
+/// Retrieve the "normalized" text representing the primary observation in a given EHR note.
+fn extract_value(item: &VisualAcuityResult<Option<ParsedItem>>) -> String {
+    let Ok(item) = item else { return format!("Error") };
+    let Some(item) = item else { return format!("") };
+    item.to_string()
 }
 
-
-lazy_static!{
-    static ref RE_PLUS_COLUMN: Regex = Regex::new(r"(?i)^(.*?)\s*(\+/-|\+|\splus)$").expect("");
+/// Determine the method used for the base observation.
+fn get_method(base_acuity: &VisualAcuityResult<Option<ParsedItem>>, other_acuities: &Vec<ParsedItem>) -> Method {
+    match base_acuity {
+        Ok(Some(ref value)) => value.clone().into(),
+        _ => Method::disambiguate(&other_acuities.iter().cloned().map_into())
+    }
 }
 
-pub(crate) fn merge_plus_columns<T>(notes: HashMap<&str, Vec<T>>) -> HashMap<&str, Vec<T>> {
-    // let keys: HashSet<_> = notes.keys().into_iter().cloned().collect();
+/// After text has been parsed, we have a list of `ParsedItem` objects, each of which may contain
+/// a variety of kinds of information. This interstitial structure organizes the items by category,
+/// which facilitates identifying & disambiguating key information.
+#[derive(Default)]
+struct SiftedParsedItems {
+    acuities: Vec<ParsedItem>,
+    other_observations: Vec<ParsedItem>,
+    plus_letters: Vec<i32>,
+    lateralities: Vec<Laterality>,
+    distances: Vec<DistanceOfMeasurement>,
+    corrections: Vec<Correction>,
+    pinholes: Vec<PinHole>,
+    unhandled: Vec<ParsedItem>,
+}
 
-    notes.into_iter()
-        .sorted_by_key(|(key, _)| *key)
-        .map(|(key, value)| {
-            let parent_key = RE_PLUS_COLUMN.captures(key)
-                .and_then(|c| c.get(1))
-                .map(|m| m.as_str());
-
-            (parent_key.unwrap_or(key), value)
-        })
-        .group_by(|(key, _)| *key)
-        .into_iter()
-        .map(|(key, group)| {
-            (key, group.flat_map(|(_, v)| v).collect())
-        })
-        .collect()
+impl SiftedParsedItems {
+    /// Iterates through parsed items, assigning each variant of `ParsedItem` into a bin/category.
+    fn sift(parsed_key: ParsedItemCollection, parsed_notes: ParsedItemCollection) -> Self {
+        let mut result = Self::default();
+        for item in [parsed_key, parsed_notes].into_iter().flatten() {
+            match item {
+                Snellen { .. } => result.acuities.push(item),
+                Jaeger { .. } => result.acuities.push(item),
+                Teller { .. } => result.acuities.push(item),
+                ETDRS { .. } => result.acuities.push(item),
+                LowVision { .. } => result.acuities.push(item),
+                PinHoleEffectItem { .. } => result.other_observations.push(item),
+                BinocularFixation(_) => result.other_observations.push(item),
+                NotTakenItem(_) => result.other_observations.push(item),
+                PlusLettersItem(value) => result.plus_letters.push(value),
+                DistanceItem(value) => result.distances.push(value),
+                LateralityItem(value) => result.lateralities.push(value),
+                CorrectionItem(value) => result.corrections.push(value),
+                PinHoleItem(value) => result.pinholes.push(value),
+                Text(_) => result.unhandled.push(item),
+                Unhandled(_) => result.unhandled.push(item),
+            }
+        }
+        result
+    }
 }

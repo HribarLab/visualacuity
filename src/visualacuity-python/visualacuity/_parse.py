@@ -2,14 +2,14 @@ from functools import lru_cache
 from typing import Dict
 
 from visualacuity import Laterality, DistanceOfMeasurement, Correction, Method, PinHole
-from . import _lib, VisitNote
+from . import _lib, Visit, VisitNote
 
 PARSER = _lib.Parser()
 
 
-def parse_visit(notes: Dict[str, str]) -> Dict[str, VisitNote]:
+def parse_visit(notes: Dict[str, str]) -> Visit:
     try:
-        return {
+        return Visit({
             key: VisitNote(
                 text=val.text,
                 text_plus=val.text_plus,
@@ -25,7 +25,7 @@ def parse_visit(notes: Dict[str, str]) -> Dict[str, VisitNote]:
                 log_mar_base_plus_letters=_try_get_attr(val, "log_mar_base_plus_letters"),
             )
             for key, val in PARSER.parse_visit(notes).items()
-        }
+        })
     except Exception as e:
         raise Exception(f"{e}: `{notes}`") from e
 

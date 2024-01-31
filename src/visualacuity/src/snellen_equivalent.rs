@@ -8,7 +8,7 @@ pub(crate) trait SnellenEquivalent {
     fn snellen_equivalent(&self) -> VisualAcuityResult<(u16, u16)>;
 }
 
-impl<'a> SnellenEquivalent for ParsedItem<'a> {
+impl SnellenEquivalent for ParsedItem {
     fn snellen_equivalent(&self) -> VisualAcuityResult<(u16, u16)> {
         match self {
             Snellen(row) => Ok((20, *row as u16)),

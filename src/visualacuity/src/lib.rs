@@ -8,91 +8,92 @@ pub(crate) mod structure;
 mod logmar;
 mod snellen_equivalent;
 mod visit;
+mod cache;
+mod visitinput;
 
-use std::collections::HashMap;
 use itertools::Itertools;
 pub use visit::{Visit, VisitNote};
-pub use logmar::LogMarEstimate;
+use visitinput::ColumnMerger;
+use crate::ParsedItem::*;
+use crate::VisualAcuityError::{*};
+use crate::cache::LruCacher;
 
 
 pub use crate::errors::{VisualAcuityError, VisualAcuityResult};
-use crate::visit::merge_plus_columns;
-use crate::ParsedItem::*;
-use crate::VisualAcuityError::{*};
 
 pub use structure::{
-    ParsedItem,
-    ParsedItemCollection,
+    Correction,
+    DistanceOfMeasurement,
     FixationPreference,
     Input,
     JaegerRow,
+    Laterality,
     LowVisionMethod,
+    Method,
+    NotTakenReason,
+    ParsedItem,
+    ParsedItemCollection,
+    PinHole,
     PinHoleEffect,
     SnellenRow,
-    Correction,
-    DistanceOfMeasurement,
-    Laterality,
-    Method,
-    PinHole,
-    NotTakenReason,
 };
+pub use visitinput::{VisitInput};
+
 pub struct Parser {
     notes_parser: parser::grammar::ChartNotesParser,
+    parse_cache: LruCacher<String, ParsedItemCollection>,
+    column_merger: ColumnMerger
 }
 
 impl Parser {
     pub fn new() -> Self {
+        let cache_size = 9999;
+        let parse_cache = LruCacher::new(cache_size);
+        let column_merger = ColumnMerger::new(cache_size);
         let notes_parser = parser::grammar::ChartNotesParser::new();
-        Self { notes_parser }
+        Self { notes_parser, parse_cache, column_merger }
     }
 
-    pub fn parse_visit<'input>(
+    pub fn parse_visit(
         &self,
-        visit_notes: HashMap<&'input str, &'input str>,
-    ) -> VisualAcuityResult<Visit<'input>> {
-        let visit_notes = visit_notes.into_iter()
-            .map(|(key, input)| (key, vec![input]))
-            .collect();
-        let (parsed_visit_notes, errors) = merge_plus_columns(visit_notes)
+        visit_notes: VisitInput,
+    ) -> VisualAcuityResult<Visit>
+    {
+        let merged = self.column_merger.merge_plus_columns(visit_notes.into());
+        let (parsed_visit_notes, errors): (_, Vec<_>) = merged
             .into_iter()
-            .map(|(key, notes)| -> VisualAcuityResult<_> {
-                let parsed_notes = ParsedItemCollection(
-                    notes.clone().into_iter()
-                        .flat_map(|n| self.parse_notes(n))
-                        .collect()
-                );
-                let parsed_key = if parsed_notes.len() > 0 {
-                    self.parse_notes(key)
-                } else {
-                    // Don't parse information from the key if the text is blank
-                    ParsedItemCollection(vec![])
-                };
-
-                let mut text_iter = notes.into_iter();
-                let text = text_iter.next().unwrap_or("");
-                let text_plus = text_iter.next().unwrap_or("");
-
-                let visit_note = VisitNote::new(text, text_plus, parsed_key, parsed_notes)?;
+            .filter(|(_, (text, text_plus))| !(text.trim().is_empty() && text_plus.is_empty()))
+            .map(|(key, (text, text_plus))| {
+                let visit_note = self.parse_visit_note(key.as_str(), (&*text, &*text_plus))?;
                 Ok((key, visit_note))
             })
-            .partition_result::<Vec<_>, Vec<_>, _, _>();
+            .partition_result();
 
         if errors.len() > 0 {
             return Err(MultipleErrors(errors))
         }
 
-        Ok(Visit(parsed_visit_notes.into_iter().collect()))
+        Ok(Visit(parsed_visit_notes))
     }
 
-    fn parse_notes<'input>(&self, notes: &'input str) -> ParsedItemCollection<'input> {
-        if notes.chars().all(|c| c.is_whitespace()) {
-            ParsedItemCollection(vec![])
-        }
-        else {
-            match self.notes_parser.parse(notes) {
+    fn parse_visit_note(
+        &self,
+        key: &str,
+        (text, text_plus): (&str, &str)
+    ) -> VisualAcuityResult<VisitNote> {
+        let parsed_text = self.parse_text(text);
+        let parsed_text_plus = self.parse_text(text_plus);
+        let parsed_notes = [parsed_text, parsed_text_plus].into_iter().flatten().collect();
+        let parsed_key = self.parse_text(key);
+        VisitNote::new(text.to_string(), text_plus.to_string(), parsed_key, parsed_notes)
+    }
+
+    fn parse_text(&self, notes: &str) -> ParsedItemCollection {
+        self.parse_cache.get(&notes.trim().to_string(), || {
+            match self.notes_parser.parse(notes.trim()) {
                 Ok(p) => p,
-                Err(e) => ParsedItemCollection(vec![Unhandled(format!("<ERROR> {e}"))])
+                Err(e) => [Unhandled(format!(" {e}"))].into_iter().collect()
             }
-        }
+        })
     }
 }

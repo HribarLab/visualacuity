@@ -1,4 +1,4 @@
-use crate::{SnellenRow, ParsedItem, VisualAcuityResult, ParsedItemCollection};
+use crate::{SnellenRow, ParsedItem, VisualAcuityResult};
 use crate::ParsedItem::*;
 use crate::VisualAcuityError::*;
 use crate::snellen_equivalent::SnellenEquivalent;
@@ -7,7 +7,7 @@ pub(crate) trait LogMarBase {
     fn log_mar_base(&self) -> VisualAcuityResult<f64>;
 }
 
-impl LogMarBase for ParsedItem<'_> {
+impl LogMarBase for ParsedItem {
     fn log_mar_base(&self) -> VisualAcuityResult<f64> {
         match &self {
             ETDRS { .. } | LowVision { .. } => {
@@ -38,30 +38,6 @@ impl LogMarBase for SnellenRow {
     }
 }
 
-#[derive(PartialEq)]
-pub struct LogMarEstimate<'a> {
-    pub parsed_items: ParsedItemCollection<'a>,
-    pub base_item: ParsedItem<'a>,
-    pub plus_letters: Vec<i32>,
-    pub log_mar_base: f64,
-    pub log_mar: f64,
-}
-
-impl<'a> LogMarEstimate<'a> {
-    pub fn from_va(
-        parsed_items: ParsedItemCollection<'a>,
-        parsed_plus: ParsedItemCollection<'a>
-    ) -> VisualAcuityResult<Self> {
-        let combined = ParsedItemCollection(parsed_items.into_iter().chain(parsed_plus.into_iter()).collect());
-        let base_item = combined.base_acuity()?;
-        let plus_letters = combined.plus_letters();
-        let log_mar_base = base_item.log_mar_base()?;
-        let log_mar = base_item.log_mar_plus_letters(&plus_letters)?;
-        Ok(Self { parsed_items: combined, base_item, plus_letters, log_mar_base, log_mar })
-    }
-}
-
-
 fn negative_log(top: u16, bottom: u16) -> f64 {
     let log = (top as f64 / bottom as f64).log10();
     if log == 0.0 { 0.0 } else { -log }
@@ -84,7 +60,7 @@ pub trait LogMarPlusLetters {
     fn log_mar_plus_letters(&self, plus_letters: &Vec<i32>) -> VisualAcuityResult<f64>;
 }
 
-impl LogMarPlusLetters for ParsedItem<'_> {
+impl LogMarPlusLetters for ParsedItem {
     fn log_mar_plus_letters(&self, plus_letters: &Vec<i32>) -> VisualAcuityResult<f64> {
         match (plus_letters.len(), self) {
             (_, Snellen(row)) => row.log_mar_plus_letters(plus_letters),
@@ -101,55 +77,5 @@ impl LogMarPlusLetters for SnellenRow {
             result += pl as f64 * log_mar_increment(self, pl)?;
         }
         Ok(result)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::JaegerRow::*;
-    use crate::SnellenRow::*;
-    use super::*;
-
-    #[test]
-    fn test_logmar_estimate() {
-        let test_cases = [
-            (
-                vec![
-                    Snellen(S20),
-                    PlusLettersItem(1),
-                    PlusLettersItem(2),
-                    PlusLettersItem(3),
-                ],
-                Ok((Snellen(S20), vec![1, 2, 3])),
-            ),
-            (
-                vec![
-                    PlusLettersItem(1),
-                    PlusLettersItem(2),
-                    PlusLettersItem(3),
-                ],
-                Err(NoValue),
-            ),
-            (
-                vec![
-                    Jaeger(J1),
-                    PlusLettersItem(1),
-                    PlusLettersItem(2),
-                    PlusLettersItem(3),
-                    Snellen(S20),
-                ],
-                Err(MultipleValues(format!("[Jaeger(J1), Snellen(S20)]"))),
-            ),
-        ];
-
-        for (parsed_items, expected) in test_cases {
-            let parsed_items = ParsedItemCollection(parsed_items);
-            let parsed_plus = ParsedItemCollection(vec![]);
-            let actual = match LogMarEstimate::from_va(parsed_items, parsed_plus) {
-                Ok(LogMarEstimate { base_item, plus_letters, .. }) => Ok((base_item, plus_letters)),
-                Err(e) => Err(e)
-            };
-            assert_eq!(actual, expected);
-        }
     }
 }
