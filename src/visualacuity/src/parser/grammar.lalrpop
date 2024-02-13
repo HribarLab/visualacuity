@@ -1,8 +1,5 @@
-use crate::{
-    DistanceItem, ParsedItem, ParsedItemCollection, PinHoleEffect, FixationPreference, SnellenRow, JaegerRow, Input,
-     DistanceOfMeasurement, NotTakenReason
-};
-use crate::parser::grammar_helpers::{merge_consecutive_texts, extract_integers, extract_integer, handle_error};
+use crate::*;
+use crate::parser::grammar_helpers::*;
 use crate::ParsedItem::*;
 use crate::LowVisionMethod::*;
 use crate::FixationPreference::*;
@@ -90,12 +87,12 @@ NLetters: u32 = {
 };
 
 pub(crate) LowVision: ParsedItem = {
-    _CountingFingers <distance:AtDistance?> => LowVision{method: CountingFingers, distance: distance.flatten() },
-    _HandMotion <distance:AtDistance?> => LowVision{method: HandMovement, distance: distance.flatten() },
-    _LightPerception <distance:AtDistance?> => LowVision{method: LightPerception, distance: distance.flatten() },
-    _NoLightPerception <distance:AtDistance?> => LowVision{method: NoLightPerception, distance: distance.flatten() },
-    SensitiveToLight <distance:AtDistance?> => LowVision{method: LightPerception, distance: distance.flatten() },
-    Negation SensitiveToLight <distance:AtDistance?> => LowVision{method: NoLightPerception, distance: distance.flatten() },
+    _CountingFingers <distance:DistanceUnits?> => LowVision{method: CountingFingers, distance: distance.unwrap_or_default() },
+    _HandMotion <distance:DistanceUnits?> => LowVision{method: HandMovement, distance: distance.unwrap_or_default() },
+    _LightPerception => LowVision{method: LightPerception, distance: DistanceUnits::NotProvided },
+    _NoLightPerception => LowVision{method: NoLightPerception, distance: DistanceUnits::NotProvided },
+    SensitiveToLight => LowVision{method: LightPerception, distance: DistanceUnits::NotProvided },
+    Negation SensitiveToLight => LowVision{method: NoLightPerception, distance: DistanceUnits::NotProvided },
     _PinHoleNoImprovement => PinHoleEffectItem(PinHoleEffect::NI),
 };
 
@@ -141,18 +138,18 @@ pub(crate) PlusLetters: ParsedItem = {
     _PlusLetters => PlusLettersItem(<>.replace(&[' ', '+'], "").parse().unwrap())
 }
 
-pub(crate) AtDistance: Option<DistanceOfMeasurement> = {
-    // TODO: Check these!
-    "to face" => Some(Near),
-    _At? _Face => Some(Near),
-    _At? _Close => Some(Near),
-    _At? <_InchRange> => Some(Near),
-    _At? <_NInches> => Some(Near),
-    _At? <d:Number> "\"" => Some(Near),
-    "to wall" => Some(Distance),
-    _At? <_NFeet> => Some(Distance),
-    _At? <_FeetRange> => Some(Distance),
-    _At? OtherToken => None,  // Discarding the messy stuff for now
+pub(crate) DistanceUnits: DistanceUnits = {
+    _At? <n:_NInches> =>? Ok(DistanceUnits::Inches(extract_float(n)?)),
+    _At? <n:_NFeet> =>? Ok(DistanceUnits::Feet(extract_float(n)?)),
+    _At? <n:_NCentimeters> =>? Ok(DistanceUnits::Centimeters(extract_float(n)?)),
+    _At? <n:_NMeters> =>? Ok(DistanceUnits::Meters(extract_float(n)?)),
+    _At? <r:_InchRange> =>? Ok(DistanceUnits::InchesRange(extract_floats(r)?)),
+    _At? <r:_FeetRange> =>? Ok(DistanceUnits::FeetRange(extract_floats(r)?)),
+    "to face" => DistanceUnits::Unhandled(input.to_string()),
+    "to wall" => DistanceUnits::Unhandled(input.to_string()),
+    _At? _Face => DistanceUnits::Unhandled(input.to_string()),
+    _At? _Close => DistanceUnits::Unhandled(input.to_string()),
+    _At? OtherToken => DistanceUnits::Unhandled(input.to_string()),  // Discarding the messy for now
 };
 
 pub(crate) VisitInfo: ParsedItem = {
@@ -215,6 +212,8 @@ match {
     r#"(?i)(@|at)"# => _At,
     r#"(?i)\d+(\.\d+|\s+1/2)?\s*(feet|foot|ft\.?|f\.?|')"# => _NFeet,
     r#"(?i)\d+(\.\d+|\s+1/2)?\s*(inches|inch|in\.?|")"# => _NInches,
+    r#"(?i)\d+(\.\d+|\s+1/2)?\s*(meters|m\.?)"# => _NMeters,
+    r#"(?i)\d+(\.\d+|\s+1/2)?\s*(centimeters|cm\.?)"# => _NCentimeters,
     r#"(?i)\d+(\.\d+|\s+1/2)?\s*(to|-)\s*\d+(\.\d+|\s+1/2)?\s*(feet|foot|ft\.?|f\.?|')"# => _FeetRange,
     r#"(?i)\d+(\.\d+|\s+1/2)?\s*(to|-)\s*\d+(\.\d+|\s+1/2)?\s*(inches|inch|in\.?|")"# => _InchRange,
 

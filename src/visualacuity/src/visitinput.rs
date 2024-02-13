@@ -4,7 +4,7 @@ use regex::Regex;
 use itertools::Itertools;
 use crate::cache::LruCacher;
 
-#[derive(PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct VisitInput(BTreeMap<String, String>);
 
 impl VisitInput {

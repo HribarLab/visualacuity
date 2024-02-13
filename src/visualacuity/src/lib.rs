@@ -29,6 +29,7 @@ pub use structure::{
     JaegerRow,
     Laterality,
     LowVisionMethod,
+    DistanceUnits,
     Method,
     NotTakenReason,
     ParsedItem,

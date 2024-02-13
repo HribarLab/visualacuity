@@ -1,8 +1,8 @@
-use crate::{ParsedItem, VisualAcuityResult};
-use crate::ParsedItem::{*};
-use crate::LowVisionMethod::{*};
-use crate::JaegerRow::{*};
-use crate::VisualAcuityError::NoSnellenEquivalent;
+use crate::*;
+use crate::ParsedItem::*;
+use crate::LowVisionMethod::*;
+use crate::JaegerRow::*;
+use crate::VisualAcuityError::*;
 
 pub(crate) trait SnellenEquivalent {
     fn snellen_equivalent(&self) -> VisualAcuityResult<(u16, u16)>;
@@ -55,14 +55,42 @@ impl SnellenEquivalent for ParsedItem {
                 _ => Err(NoSnellenEquivalent)
             },
             Teller { row, .. } => Ok((20, *row)),
-            LowVision { method, .. } => match method {
-                // https://michaelbach.de/sci/acuity.html, converted using 20 * 10^logmar
-                CountingFingers => Ok((20, 1600)),     // logMAR ~= 1.9
-                HandMovement => Ok((20, 4000)),        // logMAR ~= 2.3
-                LightPerception => Ok((20, 10000)),    // logMAR ~= 2.7
-                NoLightPerception => Ok((20, 20000)),  // logMAR ~= 3.0
-            }
-            _ => Err(NoSnellenEquivalent)
+            LowVision { method, distance } => match distance.to_feet() {
+                Ok(distance) => {
+                    use crate::DistanceUnits::*;
+                    fn convert_using_reference_acuity(feet: f64, ref_size: f64, ref_feet: f64) -> (u16, u16) {
+                        (20, (ref_size * ref_feet / feet) as u16)
+                    }
+
+                    // let citation = "Bach et al. (2007)";
+                    let citation = "Schulze-Bonzel et al. 2006";
+                    let (ref_size, ref_distance) = match citation {
+                        "Holladay (1997)" => match method {
+                            CountingFingers => Ok((200, Feet(20.0))),
+                            HandMovement => Ok((2000, Feet(20.0))),
+                            LightPerception => Err(NoSnellenEquivalent),
+                            NoLightPerception => Err(NoSnellenEquivalent),
+                        },
+                        "Schulze-Bonzel et al. 2006" => match method {
+                            CountingFingers => Ok((1500, Centimeters(30.0))),
+                            HandMovement => Ok((4000, Centimeters(30.0))),
+                            LightPerception => Err(NoSnellenEquivalent),
+                            NoLightPerception => Err(NoSnellenEquivalent),
+                        },
+                        "Bach et al. (2007)" => match method {
+                            CountingFingers => Ok((1500, Centimeters(30.0))),
+                            HandMovement => Ok((4000, Centimeters(30.0))),
+                            LightPerception => Err(NoSnellenEquivalent),
+                            NoLightPerception => Err(NoSnellenEquivalent),
+                        },
+                        _ => Err(NotImplemented)
+                    }?;
+                    let (ref_size, ref_feet) = (ref_size as f64, ref_distance.to_feet()?);
+                    Ok(convert_using_reference_acuity(distance, ref_size, ref_feet))
+                }
+                Err(e) => Err(e)
+            },
+            _ => Err(NoSnellenEquivalent),
         }
     }
 }

@@ -23,7 +23,7 @@ mod tests {
     static ref CHART_NOTES_PARSER: ChartNotesParser = ChartNotesParser::new();
     static ref PLUS_LETTERS_PARSER: PlusLettersParser = PlusLettersParser::new();
     static ref JAEGER_PARSER: JaegerParser = JaegerParser::new();
-    static ref AT_DISTANCE_PARSER: AtDistanceParser = AtDistanceParser::new();
+    static ref DISTANCE_UNITS_PARSER: DistanceUnitsParser = DistanceUnitsParser::new();
     }
 
     fn parse_notes(notes: &'static str) -> VisualAcuityResult<Vec<ParsedItem>> {
@@ -81,25 +81,36 @@ mod tests {
         assert_eq!(JAEGER_PARSER.parse(chart_note).map_err(|_| ()), expected);
     }
 
-    #[test_case("CF", Ok(vec![LowVision { method: CountingFingers, distance: None }]))]
-    #[test_case("HM", Ok(vec![LowVision { method: HandMovement, distance: None }]))]
-    #[test_case("LP", Ok(vec![LowVision { method: LightPerception, distance: None }]))]
-    #[test_case("NLP", Ok(vec![LowVision { method: NoLightPerception, distance: None }]))]
-    #[test_case("BTL", Ok(vec![LowVision { method: LightPerception, distance: None }]))]
-    #[test_case("blink to light", Ok(vec![LowVision{method: LightPerception, distance: None }]))]
+    #[test_case("CF", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::NotProvided }]))]
+    #[test_case("HM", Ok(vec![LowVision { method: HandMovement, distance: DistanceUnits::NotProvided }]))]
+    #[test_case("LP", Ok(vec![LowVision { method: LightPerception, distance: DistanceUnits::NotProvided }]))]
+    #[test_case("NLP", Ok(vec![LowVision { method: NoLightPerception, distance: DistanceUnits::NotProvided }]))]
+    #[test_case("BTL", Ok(vec![LowVision { method: LightPerception, distance: DistanceUnits::NotProvided }]))]
+    #[test_case("blink to light", Ok(vec![LowVision{method: LightPerception, distance: DistanceUnits::NotProvided }]))]
     #[test_case("NI", Ok(vec![PinHoleEffectItem(PinHoleEffect::NI)]))]
-    #[test_case("CF at 1.5ft", Ok(vec![LowVision { method: CountingFingers, distance: Some(Distance) }]))]
-    #[test_case("CF 2'", Ok(vec![LowVision { method: CountingFingers, distance: Some(Distance) }]))]
-    #[test_case("CF@3'", Ok(vec![LowVision { method: CountingFingers, distance: Some(Distance) }]))]
-    // #[test_case("CF at 3'", Ok(vec![LowVision { method: CountingFingers, distance: Some(Feet(3.0)) }]))]
-    // #[test_case("CF @ 3 feet", Ok(vec![LowVision { method: CountingFingers, distance: Some(Feet(3.0)) }]))]
-    // #[test_case("CF @ face", Ok(vec![LowVision { method: CountingFingers, distance: Some(Face) }]))]
-    // #[test_case("No BTL", Ok(vec![LowVision { method: NoLightPerception, distance: None }]))]
+    #[test_case("CF at 1.5ft", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Feet(1.5) }]))]
+    #[test_case("CF 2'", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Feet(2.0) }]))]
+    #[test_case("CF@3'", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Feet(3.0) }]))]
+    #[test_case("CF at 3'", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Feet(3.0) }]))]
+    #[test_case("CF @ 3 feet", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Feet(3.0) }]))]
+    #[test_case("CF @ face", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Unhandled("CF @ face".to_string()) }]))]
+    #[test_case("CF @ 2M", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Meters(2.0) }]))]
+    #[test_case("CF @ 0.3 meters", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Meters(0.3) }]))]
+    #[test_case("CF @ 30 cm", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Centimeters(30.0) }]))]
+    #[test_case("No BTL", Ok(vec![LowVision { method: NoLightPerception, distance: DistanceUnits::NotProvided }]))]
     #[test_case("CSM", Ok(vec![BinocularFixation(CSM)]))]
     fn test_alternative_visual_acuity(chart_note: &str, expected: Result<Vec<ParsedItem>, ()>) {
         let expected = expected.map(|e| e.into_iter().collect());
-        assert_eq!(CHART_NOTES_PARSER.parse(chart_note).map_err(|_| ()), expected);
+        assert_eq!(CHART_NOTES_PARSER.parse(chart_note).map_err(|_| ()), expected, "{chart_note:?}");
     }
+
+    #[test]
+    fn test_distance_conversion() {
+        use DistanceUnits::*;
+        assert_eq!(Centimeters(30.0).to_feet(), Ok(0.984252));
+        assert_eq!(Meters(0.3).to_feet(), Ok(0.9842519999999999));
+    }
+
 
     #[test_case("20/20 +1 -3", Ok(vec![
         Snellen(S20),
@@ -236,10 +247,10 @@ mod tests {
     #[test_case("20/15",  Ok(Some(-0.12493873660829993)))]
     #[test_case("J2",  Ok(Some(0.09691001300805639)))]
     #[test_case("J1",  Ok(Some(0.0)))]
-    #[test_case("CF",  Ok(Some(1.9)))]
-    #[test_case("HM",  Ok(Some(2.3)))]
-    #[test_case("LP",  Ok(Some(2.7)))]
-    #[test_case("NLP",  Ok(Some(3.0)))]
+    #[test_case("CF",  Err(NotImplemented))]
+    #[test_case("HM",  Err(NotImplemented))]
+    #[test_case("LP",  Err(NotImplemented))]
+    #[test_case("NLP",  Err(NotImplemented))]
     #[test_case("5 letters",  Ok(Some(1.6)))]
     #[test_case("10 letters",  Ok(Some(1.5)))]
     #[test_case("15 letters",  Ok(Some(1.4)))]
@@ -269,7 +280,7 @@ mod tests {
         let parsed_notes = parser.parse_visit(visit_notes);
         let base_item = parsed_notes?.into_iter().map(|(_, v)| v).next().expect("");
         let approx = |x| Some(format!("{:.8}", x?));
-        assert_eq!(base_item.log_mar_base.map(approx), expected.map(approx));
+        assert_eq!(base_item.log_mar_base.map(approx), expected.map(approx), "\"{notes}\"");
         Ok(())
     }
 
@@ -291,7 +302,7 @@ mod tests {
                 plus_letters: vec![-2],
                 snellen_equivalent: Ok(Some((20, 20))),
                 log_mar_base: Ok(Some(0.0)),
-                log_mar_base_plus_letters: Ok(Some(0.03230333766935214)),
+                log_mar_base_plus_letters: Ok(Some(0.03230333766935213)),
             }),
         ])
     )]
@@ -368,7 +379,7 @@ mod tests {
     )]
     #[test_case(
         [("", "CF 2'")],
-        Ok([("", "CountingFingers")])
+        Ok([("", "CountingFingers @ 2.0 feet")])
     )]
     #[test_case(
         [("", "CF at 8 feet to 20/400")],
@@ -376,14 +387,15 @@ mod tests {
     )]
     fn test_extracted_value<T: Into<VisitInput>>(visit_notes: T, expected: VisualAcuityResult<T>) {
         let parser = Parser::new();
+        let visit_notes = visit_notes.into();
         let expected = expected.map(|exp| exp.into());
-        let actual = parser.parse_visit(visit_notes.into())
+        let actual = parser.parse_visit(visit_notes.clone())
             .map(|visit| {
                 visit.into_iter()
                     .map(|(key, note)| (key, note.extracted_value))
                     .into()
             });
-        assert_eq!(actual, expected)
+        assert_eq!(actual, expected, "{visit_notes:?}")
     }
 
     #[test_case("20/20",  Ok(Some((20, 20))))]
@@ -393,10 +405,18 @@ mod tests {
     #[test_case("70 letters",  Ok(Some((20, 40))))]
     #[test_case("58 letters",  Ok(Some((20, 63))))]
     #[test_case("10 letters",  Ok(Some((20, 640))))]
-    #[test_case("CF",  Ok(Some((20, 1600))))]
-    #[test_case("HM",  Ok(Some((20, 4000))))]
-    #[test_case("LP",  Ok(Some((20, 10000))))]
-    #[test_case("NLP",  Ok(Some((20, 20000))))]
+    #[test_case("CF", Err(DistanceConversionError("NotProvided".to_string())))]
+    #[test_case("HM", Err(DistanceConversionError("NotProvided".to_string())))]
+    #[test_case("LP", Err(DistanceConversionError("NotProvided".to_string())))]
+    #[test_case("NLP", Err(DistanceConversionError("NotProvided".to_string())))]
+
+    #[test_case("CF at 20 feet",  Ok(Some((20, 73))))]   // Schulze-Bonsel et al. (2006)
+    #[test_case("CF at 2 feet",  Ok(Some((20, 738))))]   // Schulze-Bonsel et al. (2006)
+    #[test_case("CF at 30cm",  Ok(Some((20, 1500))))]    // Schulze-Bonsel et al. (2006)
+    #[test_case("HM at 20 feet",  Ok(Some((20, 196))))]  // Schulze-Bonsel et al. (2006)
+    #[test_case("HM at 2 feet",  Ok(Some((20, 1968))))]  // Schulze-Bonsel et al. (2006)
+    #[test_case("HM at 30cm",  Ok(Some((20, 4000))))]    // Schulze-Bonsel et al. (2006)
+
     #[test_case("CF at 8 feet to 20/400", Err(MultipleValues(format!(""))))]
     fn test_visit_snellen_equivalents(
         text: &str,
@@ -415,7 +435,7 @@ mod tests {
             })?;
         let actual = parsed.get("").expect("").clone();
 
-        assert_eq!(actual, expected);
+        assert_eq!(actual, expected, "{text}");
         Ok(())
     }
 

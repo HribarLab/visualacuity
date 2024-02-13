@@ -10,17 +10,17 @@ pub(crate) trait LogMarBase {
 impl LogMarBase for ParsedItem {
     fn log_mar_base(&self) -> VisualAcuityResult<f64> {
         match &self {
-            ETDRS { .. } | LowVision { .. } => {
+            ETDRS { .. } => {
                 // round these ones to one decimal place?
                 // https://www.researchgate.net/figure/Conversions-Between-Letter-LogMAR-and-Snellen-Visual-Acuity-Scores_tbl1_258819613
                 let (distance, row) = self.snellen_equivalent()
-                    .map_err(|_| LogMarNotImplemented)?;
+                    .map_err(|_| NotImplemented)?;
                 let exact = negative_log(distance, row);
                 Ok(round_digits(exact, 1))
             }
             _ => {
                 let (distance, row) = self.snellen_equivalent()
-                    .map_err(|_| LogMarNotImplemented)?;
+                    .map_err(|_| NotImplemented)?;
                 Ok(negative_log(distance, row))
             }
         }
@@ -53,7 +53,10 @@ fn log_mar_increment(base: &SnellenRow, plus_letters: i32) -> VisualAcuityResult
         else { Err(LogMarInvalidPlusLetters(format!("{plus_letters}"))) }
     };
     let (from, to) =  get_from_to()?;
-    Ok(negative_log(from as u16, to as u16) / to.n_items()? as f64)
+    let to_n_letters = to.n_items()?;
+    let (from_logmar, to_logmar) = (from.log_mar_base(), to.log_mar_base());
+    let increment = (to_logmar? - from_logmar?) / to_n_letters as f64;
+    Ok(increment)
 }
 
 pub trait LogMarPlusLetters {
@@ -65,7 +68,7 @@ impl LogMarPlusLetters for ParsedItem {
         match (plus_letters.len(), self) {
             (_, Snellen(row)) => row.log_mar_plus_letters(plus_letters),
             (0, _) => self.log_mar_base(),
-            (_, _) => Err(LogMarNotImplemented)
+            (_, _) => Err(NotImplemented)
         }
     }
 }

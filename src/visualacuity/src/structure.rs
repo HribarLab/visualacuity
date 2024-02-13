@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Display, Formatter};
-use std::hash::Hash;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::slice::Iter;
 use std::str::FromStr;
@@ -225,10 +225,52 @@ pub enum LowVisionMethod {
     NoLightPerception,
 }
 
+#[derive(Default, Debug, Clone, PartialEq)]
+pub enum DistanceUnits {
+    #[default]
+    NotProvided,
+    Unhandled(String),
+    Feet(f64),
+    Inches(f64),
+    Meters(f64),
+    Centimeters(f64),
+    FeetRange((f64, f64)),
+    InchesRange((f64, f64)),
+    MetersRange((f64, f64)),
+    CentimetersRange((f64, f64)),
+}
+
+impl Hash for DistanceUnits {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        format!("{self:?}").hash(state)
+    }
+}
+
+impl Eq for DistanceUnits { }
+
+
+impl DistanceUnits {
+    pub(crate) fn to_feet(&self) -> VisualAcuityResult<f64> {
+        use DistanceUnits::*;
+        fn average (low: f64, high: f64) -> f64 { 0.5 * (low + high) }
+        match *self {
+            Feet(feet) => Ok(feet),
+            Inches(inches) => Ok(inches / 12.0),
+            Meters(meters) => Ok(meters * 3.28084),
+            Centimeters(cm) => Ok(cm * 3.28084e-2),
+            FeetRange((low, high)) => Feet(average(low, high)).to_feet(),
+            InchesRange((low, high)) => Inches(average(low, high)).to_feet(),
+            MetersRange((low, high)) => Meters(average(low, high)).to_feet(),
+            CentimetersRange((low, high)) => Centimeters(average(low, high)).to_feet(),
+            _ => Err(DistanceConversionError(format!("{self:?}")))
+        }
+    }
+}
+
 impl Display for LowVisionMethod {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            LowVisionMethod::CountingFingers =>write!(f, "CF"),
+            LowVisionMethod::CountingFingers => write!(f, "CF"),
             LowVisionMethod::HandMovement => write!(f, "HM"),
             LowVisionMethod::LightPerception => write!(f, "LP"),
             LowVisionMethod::NoLightPerception => write!(f, "NLP"),
@@ -252,7 +294,7 @@ pub enum ParsedItem {
     Jaeger(JaegerRow),
     Teller { row: u16, card: u16 },
     ETDRS { letters: u32 },
-    LowVision { method: LowVisionMethod, distance: Option<DistanceOfMeasurement> },
+    LowVision { method: LowVisionMethod, distance: DistanceUnits },
     PinHoleEffectItem(PinHoleEffect),
     BinocularFixation(FixationPreference),
     PlusLettersItem(i32),
@@ -277,7 +319,10 @@ impl Display for ParsedItem {
             ETDRS{letters} => format!("{letters} letters"),
             PinHoleItem(effect) => format!("{effect:?}"),
             Teller { card, .. } => format!("card {card:?}"),
-            LowVision { method, .. } => format!("{method:?}"),
+            LowVision { method, distance } => match distance.to_feet() {
+                Ok(feet) => format!("{method:?} @ {feet:?} feet"),
+                _ => format!("{method:?}")
+            },
             PinHoleEffectItem(effect) => format!("{effect:?}"),
             BinocularFixation(preference) => format!("{preference:?}"),
             NotTakenItem(reason) => format!("{reason:?}"),

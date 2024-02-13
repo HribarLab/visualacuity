@@ -57,7 +57,7 @@ class TestVAInterface(unittest.TestCase):
                         extracted_value="20/20",
                         snellen_equivalent=(20, 20),
                         log_mar_base=0.0,
-                        log_mar_base_plus_letters=0.03230333766935214,
+                        log_mar_base_plus_letters=0.03230333766935213,
                     ),
                     "Both Eyes Distance SC": VisitNote(
                         laterality=OU,
@@ -68,7 +68,7 @@ class TestVAInterface(unittest.TestCase):
                         extracted_value="20/20",
                         snellen_equivalent=(20, 20),
                         log_mar_base=0.0,
-                        log_mar_base_plus_letters=0.01615166883467607,
+                        log_mar_base_plus_letters=0.016151668834676065,
                     ),
                     "Both Eyes Near CC": VisitNote(
                         laterality=OU,

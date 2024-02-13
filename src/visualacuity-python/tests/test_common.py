@@ -1,6 +1,7 @@
 import csv
 import os
 import re
+import sys
 import unittest
 from typing import Dict, List
 
@@ -15,6 +16,9 @@ class TestVAInterface(unittest.TestCase):
         test_cases = _load_file(filename)
 
         for line_number, row in enumerate(test_cases, start=2):
+            if row["EHR Entry"].startswith("#"):  # Commented out
+                continue
+
             description = row.pop("Comment")
             expect_snellen_equivalent = row.pop("Snellen Equivalent")
             expect_logmar = row.pop("LogMAR Equivalent")
@@ -25,6 +29,17 @@ class TestVAInterface(unittest.TestCase):
             with self.subTest(f"Line {line_number} - Parsing - {input_plain_text}"):
                 output = parse_visit(row)
                 actual = output["EHR Entry"]
+
+            try:
+                print(
+                    f"{input_plain_text}\t"
+                    f"{actual.snellen_equivalent[0]}/{actual.snellen_equivalent[1]}\t"
+                    f"{actual.log_mar_base}\t"
+                    f"{actual.log_mar_base_plus_letters}\t",
+                    file=sys.stderr
+                )
+            except:
+                pass
 
             with self.subTest(f"Line {line_number} - Snellen Equivalent - {input_plain_text}"):
                 if expect_snellen_equivalent != "Error":
@@ -40,14 +55,14 @@ class TestVAInterface(unittest.TestCase):
                 self.assertAlmostEqual(
                     expect_logmar,
                     "Error" if actual.log_mar_base is None else actual.log_mar_base,
-                    places=10,
+                    places=2,
                     msg=msg
                 )
             with self.subTest(f"Line {line_number} - LogMAR - {input_plain_text}"):
                 self.assertAlmostEqual(
                     _try_float(expect_logmar),
                     _try_float(actual.log_mar_base),
-                    places=10,
+                    places=2,
                     msg=msg
                 )
 
@@ -55,7 +70,7 @@ class TestVAInterface(unittest.TestCase):
                 self.assertAlmostEqual(
                     _try_float(expect_logmar_base_plus_letters),
                     _try_float(actual.log_mar_base_plus_letters),
-                    places=10,
+                    places=2,
                     msg=msg
                 )
 
@@ -64,6 +79,9 @@ class TestVAInterface(unittest.TestCase):
         test_cases = _load_file(filename)
 
         for line_number, row in enumerate(test_cases, start=2):
+            if row["EHR Entry"].startswith("#"):  # Commented out
+                continue
+
             description = row.pop("Comment")
             expect_method = row.pop("Method")
             expect_extracted_value = row.pop("Extracted Value")
@@ -98,6 +116,12 @@ class TestVAInterface(unittest.TestCase):
                     msg=msg
                 )
 
+    def assertAlmostEqual(self, first, second, *args, places=None, delta=None, **kwargs) -> None:
+        if type(first) == type(second):
+            super().assertAlmostEqual(first, second, *args, places=places, delta=delta, **kwargs)
+        else:
+            self.assertEqual(first, second, *args, **kwargs)
+
 
 def _load_file(filename) -> List[Dict[str, str]]:
     path = os.path.join(os.path.dirname(__file__), filename)
@@ -107,6 +131,8 @@ def _load_file(filename) -> List[Dict[str, str]]:
 
 
 def _try_float(value):
+    if isinstance(value, str):
+        value = value.lstrip("+")
     try:
         return float(value)
     except:

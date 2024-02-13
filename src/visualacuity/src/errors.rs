@@ -1,5 +1,5 @@
 use std::fmt::{Debug, Display, Formatter};
-use std::num::ParseIntError;
+use std::num::{ParseFloatError, ParseIntError};
 use itertools::ExactlyOneError;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -7,20 +7,35 @@ pub enum VisualAcuityError {
     ParseError(String),
     UnknownError(String),
     Unreachable,
-    LogMarNotImplemented,
+    NotImplemented,
     LogMarInvalidSnellenRow(String),
     LogMarInvalidPlusLetters(String),
+    DistanceConversionError(String),
     NoSnellenEquivalent,
     PlusLettersNotAllowed,
     NoValue,
     MultipleValues(String),
     VisitMetaError,
     MultipleErrors(Vec<VisualAcuityError>),
+    ExtractNumbersError(String),
+    ChartNotFound(String),
 }
 
 impl From<ParseIntError> for VisualAcuityError {
     fn from(value: ParseIntError) -> Self {
         VisualAcuityError::ParseError(format!("{value:?}"))
+    }
+}
+
+impl From<ParseFloatError> for VisualAcuityError {
+    fn from(value: ParseFloatError) -> Self {
+        VisualAcuityError::ParseError(format!("{value:?}"))
+    }
+}
+
+impl<T> From<VisualAcuityError> for lalrpop_util::ParseError<usize, T, &str> {
+    fn from(_: VisualAcuityError) -> Self {
+        Self::User { error: "Parse error!" }
     }
 }
 
