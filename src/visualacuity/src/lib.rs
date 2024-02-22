@@ -18,6 +18,7 @@ use visitinput::ColumnMerger;
 use crate::ParsedItem::*;
 use crate::VisualAcuityError::{*};
 use crate::cache::LruCacher;
+use crate::parser::grammar::ChartNotesParser;
 pub use crate::errors::{VisualAcuityError, VisualAcuityResult};
 
 pub use structure::*;
