@@ -5,11 +5,10 @@ mod tests {
     use test_case::test_case;
 
     use crate::*;
-    use crate::JaegerRow::*;
-    use crate::SnellenRow::*;
+    use crate::DistanceUnits::*;
     use crate::ParsedItem::*;
-    use crate::LowVisionMethod::*;
     use crate::FixationPreference::*;
+    use crate::logmar::LogMarBase;
     use crate::VisualAcuityError::*;
     use crate::structure::Correction::*;
     use crate::structure::DistanceOfMeasurement::*;
@@ -18,11 +17,13 @@ mod tests {
     use crate::visit::*;
     use crate::visitinput::*;
     use crate::parser::grammar::*;
+    use crate::snellen_equivalent::SnellenEquivalent;
 
     lazy_static!{
     static ref CHART_NOTES_PARSER: ChartNotesParser = ChartNotesParser::new();
     static ref PLUS_LETTERS_PARSER: PlusLettersParser = PlusLettersParser::new();
     static ref JAEGER_PARSER: JaegerParser = JaegerParser::new();
+    static ref SNELLEN_PARSER: SnellenParser = SnellenParser::new();
     static ref DISTANCE_UNITS_PARSER: DistanceUnitsParser = DistanceUnitsParser::new();
     }
 
@@ -31,6 +32,50 @@ mod tests {
             Ok(p) => Ok(p.into_iter().collect()),
             Err(e) => Err(ParseError(format!("{e:?}: {notes}")))
         }
+    }
+
+    #[test]
+    fn test_teller() {
+        let expected = vec![
+            SnellenFraction(format!("20/23")),
+            TellerCyCm(format!("38 cy/cm")),
+            TellerCard(format!("Card 17")),
+        ].into_iter().collect();
+        assert_eq!(CHART_NOTES_PARSER.parse("20/23 (38.0 cy/cm) Card 17"), Ok(expected));
+        assert_eq!(SnellenFraction(format!("20/23")).snellen_equivalent(), Ok((20, 23).into()), "20/23 fraction");
+        assert_eq!(SnellenFraction(format!("20/23")).log_mar_base(), Ok(0.0606978403536117), "20/23 logmar");
+        assert_eq!(SnellenFraction(format!("38 cy/cm")).snellen_equivalent(), Ok((20, 23).into()), "38 cy/cm fraction");
+        assert_eq!(SnellenFraction(format!("38 cy/cm")).log_mar_base(), Ok(0.0606978403536117), "38 cy/cm logmar");
+        assert_eq!(SnellenFraction(format!("Card 17")).snellen_equivalent(), Ok((20, 23).into()), "Card 17 fraction");
+        assert_eq!(SnellenFraction(format!("Card 17")).log_mar_base(), Ok(0.0606978403536117), "Card 17 logmar");
+    }
+
+    #[test_case(
+        "CF @ 30cm",
+        Ok(vec![LowVision("CF".to_string(), Centimeters(30.0) )]),
+        Ok((20, 1500).into()),
+        Ok(1.8750612633917)
+    )]
+    #[test_case(
+        "CF @ 3ft",
+        Ok(vec![LowVision("CF".to_string(), Feet(3.0) )]),
+        Ok((20, 492).into()),
+        Ok(1.390935107103379)
+    )]
+    fn test_ntlv(
+        s: &str,
+        expected: VisualAcuityResult<Vec<ParsedItem>>,
+        expect_fraction: VisualAcuityResult<Fraction>,
+        expect_log_mar: VisualAcuityResult<f64>
+    ) -> VisualAcuityResult<()> {
+        let expected = expected.map(|exp| exp.into_iter().collect());
+        let actual: VisualAcuityResult<_> = CHART_NOTES_PARSER.parse(s)
+            .map_err(|e| UnknownError(format!("{e:?}")));
+        assert_eq!(actual, expected);
+        let item = actual.map(|item| item.into_iter().next().unwrap());
+        assert_eq!(item.clone().and_then(|it| it.snellen_equivalent()), expect_fraction);
+        assert_eq!(item.clone().and_then(|it| it.log_mar_base()), expect_log_mar);
+        Ok(())
     }
 
     #[test_case("+6", Ok(PlusLettersItem(6)); "plus 6 without a space")]
@@ -45,20 +90,20 @@ mod tests {
     }
 
     #[test_case("20 / 30 + 1", Ok(vec![
-        Snellen(S30),
+        SnellenFraction(format!("20/30")),
         PlusLettersItem(1),
     ]) ; "20 / 30 plus one" )]
     #[test_case("20 / 30 - 1", Ok(vec![
-        Snellen(S30),
+        SnellenFraction(format!("20/30")),
         PlusLettersItem(-1),
     ]); "20 / 30 minus one")]
     #[test_case("20 / 30 +3 -1", Ok(vec![
-        Snellen(S30),
+        SnellenFraction(format!("20/30")),
         PlusLettersItem(3),
         PlusLettersItem(-1),
     ]))]
     #[test_case("20/30-1+6", Ok(vec![
-        Snellen(S30),
+        SnellenFraction(format!("20/30")),
         PlusLettersItem(-1),
         PlusLettersItem(6),
     ]))]
@@ -73,31 +118,32 @@ mod tests {
         assert_eq!(CHART_NOTES_PARSER.parse(chart_note).map_err(|_| ()), expected);
     }
 
-    #[test_case("J1", Ok(Jaeger(J1)))]
-    #[test_case("J1+", Ok(Jaeger(J1PLUS)))]
-    #[test_case("J29", Ok(Jaeger(J29)))]
-    #[test_case("J0", Ok(Jaeger(J1PLUS)))]
-    fn test_jaeger(chart_note: &str, expected: Result<ParsedItem, ()>) {
-        assert_eq!(JAEGER_PARSER.parse(chart_note).map_err(|_| ()), expected);
+    #[test_case("J1", Ok(Jaeger("J1".to_string())))]
+    #[test_case("J1+", Ok(Jaeger("J1+".to_string())); "J1plus")]
+    #[test_case("J29", Ok(Jaeger("J29".to_string())))]
+    #[test_case("J0", Ok(Jaeger("J1+".to_string())))]
+    fn test_jaeger(chart_note: &str, expected: VisualAcuityResult<ParsedItem>) {
+        let actual = JAEGER_PARSER.parse(chart_note).map_err(|e| UnknownError(format!("{e:?}")));
+        assert_eq!(actual, expected, "{chart_note}");
     }
 
-    #[test_case("CF", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::NotProvided }]))]
-    #[test_case("HM", Ok(vec![LowVision { method: HandMovement, distance: DistanceUnits::NotProvided }]))]
-    #[test_case("LP", Ok(vec![LowVision { method: LightPerception, distance: DistanceUnits::NotProvided }]))]
-    #[test_case("NLP", Ok(vec![LowVision { method: NoLightPerception, distance: DistanceUnits::NotProvided }]))]
-    #[test_case("BTL", Ok(vec![LowVision { method: LightPerception, distance: DistanceUnits::NotProvided }]))]
-    #[test_case("blink to light", Ok(vec![LowVision{method: LightPerception, distance: DistanceUnits::NotProvided }]))]
+    #[test_case("CF", Ok(vec![LowVision("CF".to_string(), NotProvided )]))]
+    #[test_case("HM", Ok(vec![LowVision("HM".to_string(), NotProvided )]))]
+    #[test_case("LP", Ok(vec![LowVision("LP".to_string(), NotProvided )]))]
+    #[test_case("NLP", Ok(vec![LowVision("NLP".to_string(), NotProvided )]))]
+    #[test_case("BTL", Ok(vec![LowVision("LP".to_string(), NotProvided )]))]
+    #[test_case("blink to light", Ok(vec![LowVision("LP".to_string(), NotProvided )]))]
     #[test_case("NI", Ok(vec![PinHoleEffectItem(PinHoleEffect::NI)]))]
-    #[test_case("CF at 1.5ft", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Feet(1.5) }]))]
-    #[test_case("CF 2'", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Feet(2.0) }]))]
-    #[test_case("CF@3'", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Feet(3.0) }]))]
-    #[test_case("CF at 3'", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Feet(3.0) }]))]
-    #[test_case("CF @ 3 feet", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Feet(3.0) }]))]
-    #[test_case("CF @ face", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Unhandled("CF @ face".to_string()) }]))]
-    #[test_case("CF @ 2M", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Meters(2.0) }]))]
-    #[test_case("CF @ 0.3 meters", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Meters(0.3) }]))]
-    #[test_case("CF @ 30 cm", Ok(vec![LowVision { method: CountingFingers, distance: DistanceUnits::Centimeters(30.0) }]))]
-    #[test_case("No BTL", Ok(vec![LowVision { method: NoLightPerception, distance: DistanceUnits::NotProvided }]))]
+    #[test_case("CF at 1.5ft", Ok(vec![LowVision("CF".to_string(), Feet(1.5) )]))]
+    #[test_case("CF 2'", Ok(vec![LowVision("CF".to_string(), Feet(2.0) )]))]
+    #[test_case("CF@3'", Ok(vec![LowVision("CF".to_string(), Feet(3.0) )]))]
+    #[test_case("CF at 3'", Ok(vec![LowVision("CF".to_string(), Feet(3.0) )]))]
+    #[test_case("CF @ 3 feet", Ok(vec![LowVision("CF".to_string(), Feet(3.0) )]))]
+    #[test_case("CF @ face", Ok(vec![LowVision("CF".to_string(), DistanceUnits::Unhandled("CF @ face".to_string()) )]))]
+    #[test_case("CF @ 2M", Ok(vec![LowVision("CF".to_string(), Meters(2.0) )]))]
+    #[test_case("CF @ 0.3 meters", Ok(vec![LowVision("CF".to_string(), Meters(0.3) )]))]
+    #[test_case("CF @ 30 cm", Ok(vec![LowVision("CF".to_string(), Centimeters(30.0) )]))]
+    #[test_case("No BTL", Ok(vec![LowVision("NLP".to_string(), NotProvided )]))]
     #[test_case("CSM", Ok(vec![BinocularFixation(CSM)]))]
     fn test_alternative_visual_acuity(chart_note: &str, expected: Result<Vec<ParsedItem>, ()>) {
         let expected = expected.map(|e| e.into_iter().collect());
@@ -106,14 +152,13 @@ mod tests {
 
     #[test]
     fn test_distance_conversion() {
-        use DistanceUnits::*;
         assert_eq!(Centimeters(30.0).to_feet(), Ok(0.984252));
         assert_eq!(Meters(0.3).to_feet(), Ok(0.9842519999999999));
     }
 
 
     #[test_case("20/20 +1 -3", Ok(vec![
-        Snellen(S20),
+        SnellenFraction(format!("20/20")),
         PlusLettersItem(1),
         PlusLettersItem(-3),
     ]))]
@@ -122,18 +167,18 @@ mod tests {
     ]))]
     #[test_case("ok 20/20 +1 -3", Ok(vec![
         Text("ok".to_string()),
-        Snellen(S20),
+        SnellenFraction(format!("20/20")),
         PlusLettersItem(1),
         PlusLettersItem(-3),
     ]))]
     #[test_case("20/20 +1 -3 asdf", Ok(vec![
-        Snellen(S20),
+        SnellenFraction(format!("20/20")),
         PlusLettersItem(1),
         PlusLettersItem(-3),
         Text("asdf".to_string()),
     ]))]
     #[test_case("20/20 +1 -3 asdf qwerty", Ok(vec![
-        Snellen(S20),
+        SnellenFraction(format!("20/20")),
         PlusLettersItem(1),
         PlusLettersItem(-3),
         Text("asdf qwerty".to_string()),
@@ -148,17 +193,21 @@ mod tests {
     }
 
     #[test_case("20/20-1", Ok(vec![
-        Snellen(S20),
+        SnellenFraction(format!("20/20")),
         PlusLettersItem(-1),
     ]))]
     #[test_case("20/125", Ok(vec![
-        Snellen(S125),
+        SnellenFraction(format!("20/125")),
     ]))]
     #[test_case("20/23 (38.0 cy/cm) Card 17", Ok(vec![
-        Teller { row: 23, card: 17 },
+        SnellenFraction(format!("20/23")),
+        TellerCyCm(format!("38 cy/cm")),
+        TellerCard(format!("Card 17")),
     ]))]
     #[test_case("20/130 (6.5 cy/cm) Card 12", Ok(vec![
-        Teller { row: 130, card: 12 },
+        SnellenFraction(format!("20/130")),
+        TellerCyCm(format!("6.5 cy/cm")),
+        TellerCard(format!("Card 12")),
     ]))]
     fn test_whole_thing(chart_note: &'static str, expected: Result<Vec<ParsedItem>, ()>) {
         assert_eq!(parse_notes(chart_note).map_err(|_| ()), expected);
@@ -197,21 +246,22 @@ mod tests {
         BinocularFixation(FixAndFollow),
     ]))]
     fn test_fix_and_follow(chart_note: &'static str, expected: Result<Vec<ParsedItem>, ()>) {
-        assert_eq!(parse_notes(chart_note).map_err(|_| ()), expected);
+        assert_eq!(parse_notes(chart_note).map_err(|_| ()), expected, "{chart_note}");
     }
 
     #[test_case("CSM Pref", Ok(vec![BinocularFixation(CSM), BinocularFixation(Prefers)]))]
-    #[test_case("j1", Ok(vec![Jaeger(J1)]))]
-    #[test_case("79 letters", Ok(vec![ETDRS { letters: 79 }]))]
-    #[test_case("81ltrs", Ok(vec![ETDRS { letters: 81 }]))]
+    #[test_case("j1", Ok(vec![Jaeger("J1".to_string())]))]
+    #[test_case("j30", Ok(vec![Text("j30".to_string())]))]
+    #[test_case("79 letters", Ok(vec![ETDRS("79 letters".to_string())]))]
+    #[test_case("81ltrs", Ok(vec![ETDRS("81 letters".to_string())]))]
     // #[test_case("20/13 ETDRS (95 letters)", Ok(vec![ETDRS { letters: 95 }]))]
-    #[test_case("20/20 ETDRS (83 letters)", Ok(vec![Snellen(S20), ETDRS { letters: 83 }]))]
+    #[test_case("20/20 ETDRS (83 letters)", Ok(vec![SnellenFraction(format!("20/20")), ETDRS("83 letters".to_string())]))]
     fn test_various(chart_note: &'static str, expected: Result<Vec<ParsedItem>, ()>) {
         assert_eq!(parse_notes(chart_note).map_err(|_| ()), expected);
     }
 
-    #[test_case("20/20 +1", "", (Snellen(S20), vec![1]))]
-    #[test_case("J4 +2", "", (Jaeger(J4), vec![2]))]
+    #[test_case("20/20 +1", "", (SnellenFraction(format!("20/20")), vec![1]))]
+    #[test_case("J4 +2", "", (Jaeger("J4".to_string()), vec![2]))]
     fn test_base_and_plus_letters(
         notes: &str,
         plus: &str,
@@ -300,7 +350,7 @@ mod tests {
                 method: Method::Snellen,
                 extracted_value: format!("20/20"),
                 plus_letters: vec![-2],
-                snellen_equivalent: Ok(Some((20, 20))),
+                snellen_equivalent: Ok(Some((20, 20).into())),
                 log_mar_base: Ok(Some(0.0)),
                 log_mar_base_plus_letters: Ok(Some(0.03230333766935213)),
             }),
@@ -321,7 +371,7 @@ mod tests {
                 method: Method::Snellen,
                 extracted_value: format!("20/100"),
                 plus_letters: vec![-1, 2],
-                snellen_equivalent: Ok(Some((20, 100))),
+                snellen_equivalent: Ok(Some((20, 100).into())),
                 log_mar_base: Ok(Some(0.6989700043360187)),
                 log_mar_base_plus_letters: Ok(Some(0.6828183355013427)),
             })
@@ -343,9 +393,9 @@ mod tests {
                 method: Method::Error(MultipleValues(format!("[Snellen, Jaeger]"))),
                 extracted_value: format!("Error"),
                 plus_letters: vec![],
-                snellen_equivalent: Err(MultipleValues(format!("[Snellen(S20), Jaeger(J5)]"))),
-                log_mar_base: Err(MultipleValues(format!("[Snellen(S20), Jaeger(J5)]"))),
-                log_mar_base_plus_letters: Err(MultipleValues(format!("[Snellen(S20), Jaeger(J5)]"))),
+                snellen_equivalent: Err(MultipleValues(format!("[SnellenFraction(\"20/20\"), Jaeger(\"J5\")]"))),
+                log_mar_base: Err(MultipleValues(format!("[SnellenFraction(\"20/20\"), Jaeger(\"J5\")]"))),
+                log_mar_base_plus_letters: Err(MultipleValues(format!("[SnellenFraction(\"20/20\"), Jaeger(\"J5\")]"))),
             })
         ])
         ; "Handling ambiguous Correction values"
@@ -357,8 +407,8 @@ mod tests {
         let expected = expected.map(|v| Visit(v.into()));
         let parser = Parser::new();
         let visit_notes = visit_notes.into();
-        let actual = parser.parse_visit(visit_notes);
-        assert_eq!(actual, expected);
+        let actual = parser.parse_visit(visit_notes.clone());
+        assert_eq!(actual, expected, "{visit_notes:?}");
     }
 
     #[test_case(
@@ -379,7 +429,7 @@ mod tests {
     )]
     #[test_case(
         [("", "CF 2'")],
-        Ok([("", "CountingFingers @ 2.0 feet")])
+        Ok([("", "CF @ 2.0 feet")])
     )]
     #[test_case(
         [("", "CF at 8 feet to 20/400")],
@@ -405,10 +455,10 @@ mod tests {
     #[test_case("70 letters",  Ok(Some((20, 40))))]
     #[test_case("58 letters",  Ok(Some((20, 63))))]
     #[test_case("10 letters",  Ok(Some((20, 640))))]
-    #[test_case("CF", Err(DistanceConversionError("NotProvided".to_string())))]
-    #[test_case("HM", Err(DistanceConversionError("NotProvided".to_string())))]
-    #[test_case("LP", Err(DistanceConversionError("NotProvided".to_string())))]
-    #[test_case("NLP", Err(DistanceConversionError("NotProvided".to_string())))]
+    #[test_case("CF", Err(NoSnellenEquivalent("CF".to_string())))]
+    #[test_case("HM", Err(NoSnellenEquivalent("HM".to_string())))]
+    #[test_case("LP", Err(NoSnellenEquivalent("LP".to_string())))]
+    #[test_case("NLP", Err(NoSnellenEquivalent("NLP".to_string())))]
 
     #[test_case("CF at 20 feet",  Ok(Some((20, 73))))]   // Schulze-Bonsel et al. (2006)
     #[test_case("CF at 2 feet",  Ok(Some((20, 738))))]   // Schulze-Bonsel et al. (2006)
@@ -422,6 +472,7 @@ mod tests {
         text: &str,
         expected: VisualAcuityResult<Option<(u16, u16)>>
     ) -> Result<(), anyhow::Error> {
+        let expected = expected.map(|e| e.map(Into::into));
         let parser = Parser::new();
         let visit_notes = BTreeMap::from([("", text)]);
         let parsed = parser.parse_visit(visit_notes.into())

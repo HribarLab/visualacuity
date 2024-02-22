@@ -4,12 +4,18 @@ use std::ops::Deref;
 use std::slice::Iter;
 use std::str::FromStr;
 use itertools::{ExactlyOneError, Itertools};
-use derive_more::IntoIterator;
-use crate::{VisualAcuityError, VisualAcuityResult};
+use derive_more::{Deref, IntoIterator};
+use lazy_static::lazy_static;
+use regex::Regex;
+use crate::{DistanceUnits, VisualAcuityError, VisualAcuityResult};
 use crate::ParsedItem::*;
 use crate::VisualAcuityError::*;
-use crate::SnellenRow::*;
-use num_traits::FromPrimitive;
+use crate::charts::ChartRow;
+use crate::DistanceUnits::NotProvided;
+
+lazy_static! {
+static ref PATTERN_FRACTION: Regex = Regex::new(r"^\s*(\d+(?:\.\d*)?)\s*/\s*(\d+(?:\.\d*)?)\s*$").expect("");
+}
 
 pub trait TInput: PartialEq + Debug + Clone {}
 impl<T> TInput for T where T: PartialEq + Debug + Clone {}
@@ -37,153 +43,47 @@ impl<'input, T: TInput> PartialEq<T> for Input<'input, T> {
     }
 }
 
-#[derive(Hash, Copy, Clone, Debug, PartialEq, Eq, FromPrimitive)]
-#[repr(u16)]
-pub enum SnellenRow {
-    S15 = 15,
-    S20 = 20,
-    S25 = 25,
-    S30 = 30,
-    S40 = 40,
-    S50 = 50,
-    S60 = 60,
-    S70 = 70,
-    S80 = 80,
-    S100 = 100,
-    S125 = 125,
-    S150 = 150,
-    S200 = 200,
-    S250 = 250,
-    S300 = 300,
-    S400 = 400,
-    S500 = 500,
-    S600 = 600,
-
-    // extended:
-    S800 = 800,
-    S640 = 640,
-    S320 = 320,
-    S160 = 160,
-    S63 = 63,
-    S32 = 32,
-    S12 = 12,
-    S10 = 10,
-}
-
-impl SnellenRow {
-    pub(crate) fn n_items(&self) -> VisualAcuityResult<u16> {
-        match self {
-            S15 | S20 | S25 => Ok(6),
-            S30 | S40 | S50 => Ok(5),
-            S60 | S70 => Ok(4),
-            S80 => Ok(3),
-            S100 | S125 | S150 => Ok(2),
-            S200 | S250 | S300 | S400 | S500 | S600 => Ok(1),
-            _ => Err(LogMarInvalidSnellenRow(format!("{}", *self as u16))),
-        }
-    }
-
-    pub(crate) fn positive(&self) -> VisualAcuityResult<Self> {
-        match self {
-            S15 => Ok(S15),
-            S20 => Ok(S15),
-            S25 => Ok(S20),
-            S30 => Ok(S25),
-            S40 => Ok(S30),
-            S50 => Ok(S40),
-            S60 => Ok(S50),
-            S70 => Ok(S60),
-            S80 => Ok(S70),
-            S100 => Ok(S80),
-            S125 => Ok(S100),
-            S150 => Ok(S125),
-            S200 => Ok(S150),
-            S250 => Ok(S200),
-            S300 => Ok(S250),
-            S400 => Ok(S300),
-            S500 => Ok(S400),
-            S600 => Ok(S500),
-            _ => Err(LogMarInvalidPlusLetters(format!("{} +n", *self as u16)))
-        }
-    }
-
-    pub(crate) fn negative(&self) -> VisualAcuityResult<Self> {
-        match self {
-            &S15 => Ok(S20),
-            &S20 => Ok(S25),
-            &S25 => Ok(S30),
-            &S30 => Ok(S40),
-            &S40 => Ok(S50),
-            &S50 => Ok(S60),
-            &S60 => Ok(S70),
-            &S70 => Ok(S80),
-            &S80 => Ok(S100),
-            &S100 => Ok(S125),
-            &S125 => Ok(S150),
-            &S150 => Ok(S200),
-            &S200 => Ok(S250),
-            &S250 => Ok(S300),
-            &S300 => Ok(S400),
-            &S400 => Ok(S500),
-            &S500 => Ok(S600),
-            &S600 => Ok(S600),
-            _ => Err(LogMarInvalidPlusLetters(format!("{} -n", *self as u16)))
-        }
+impl<'input, T: TInput> Display for Input<'input, T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &self.input[self.left..self.right])
     }
 }
 
-impl FromStr for SnellenRow {
+#[derive(Clone, Copy, PartialEq, Deref, Debug)]
+pub struct Fraction(pub(crate) (f64, f64));
+
+impl Display for Fraction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let Fraction((num, den)) = self;
+        write!(f, "{num}/{den}")
+    }
+}
+impl Eq for Fraction {}
+impl Hash for Fraction {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        format!("{self:?}").hash(state)
+    }
+}
+
+impl<T: Into<f64>> From<(T, T)> for Fraction {
+    fn from((n, d): (T, T)) -> Self { Self((n.into(), d.into())) }
+}
+
+impl From<Fraction> for (f64, f64) {
+    fn from(value: Fraction) -> Self {
+        *value
+    }
+}
+
+impl FromStr for Fraction {
     type Err = VisualAcuityError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let n = s.parse::<u16>().map_err(|e| ParseError(format!("{e:?}")))?;
-        FromPrimitive::from_u16(n).ok_or(ParseError(format!("FromStr error")))
-    }
-}
-
-
-#[derive(Hash, Clone, Debug, PartialEq, Eq, FromPrimitive)]
-pub enum JaegerRow {
-    J1PLUS = 0,
-    J1 = 1,
-    J2 = 2,
-    J3 = 3,
-    J4 = 4,
-    J5 = 5,
-    J6 = 6,
-    J7 = 7,
-    J8 = 8,
-    J9 = 9,
-    J10 = 10,
-    J11 = 11,
-    J12 = 12,
-    J13 = 13,
-    J14 = 14,
-    J15 = 15,
-    J16 = 16,
-    J17 = 17,
-    J18 = 18,
-    J19 = 19,
-    J20 = 20,
-    J21 = 21,
-    J22 = 22,
-    J23 = 23,
-    J24 = 24,
-    J25 = 25,
-    J26 = 26,
-    J27 = 27,
-    J28 = 28,
-    J29 = 29,
-}
-
-impl FromStr for JaegerRow {
-    type Err = VisualAcuityError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.trim_start_matches(&['J', 'j']) {
-            "1+" => Ok(JaegerRow::J1PLUS),
-            s => Self::from_u16(s.parse()?).ok_or(ParseError(s.to_string()))
-        }
+        let value = PATTERN_FRACTION.captures(s)
+            .and_then(|c| Some((c.get(1)?.as_str(), c.get(2)?.as_str())))
+            .map(|(n, d)| Ok((n.parse()?, d.parse()?)))
+            .unwrap_or_else(|| Err(ParseError(format!("{s}"))));
+        Ok(Self(value?))
     }
 }
 
@@ -218,67 +118,6 @@ pub enum PinHoleEffect {
 }
 
 #[derive(Hash, Clone, Debug, PartialEq, Eq)]
-pub enum LowVisionMethod {
-    CountingFingers,
-    HandMovement,
-    LightPerception,
-    NoLightPerception,
-}
-
-#[derive(Default, Debug, Clone, PartialEq)]
-pub enum DistanceUnits {
-    #[default]
-    NotProvided,
-    Unhandled(String),
-    Feet(f64),
-    Inches(f64),
-    Meters(f64),
-    Centimeters(f64),
-    FeetRange((f64, f64)),
-    InchesRange((f64, f64)),
-    MetersRange((f64, f64)),
-    CentimetersRange((f64, f64)),
-}
-
-impl Hash for DistanceUnits {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        format!("{self:?}").hash(state)
-    }
-}
-
-impl Eq for DistanceUnits { }
-
-
-impl DistanceUnits {
-    pub(crate) fn to_feet(&self) -> VisualAcuityResult<f64> {
-        use DistanceUnits::*;
-        fn average (low: f64, high: f64) -> f64 { 0.5 * (low + high) }
-        match *self {
-            Feet(feet) => Ok(feet),
-            Inches(inches) => Ok(inches / 12.0),
-            Meters(meters) => Ok(meters * 3.28084),
-            Centimeters(cm) => Ok(cm * 3.28084e-2),
-            FeetRange((low, high)) => Feet(average(low, high)).to_feet(),
-            InchesRange((low, high)) => Inches(average(low, high)).to_feet(),
-            MetersRange((low, high)) => Meters(average(low, high)).to_feet(),
-            CentimetersRange((low, high)) => Centimeters(average(low, high)).to_feet(),
-            _ => Err(DistanceConversionError(format!("{self:?}")))
-        }
-    }
-}
-
-impl Display for LowVisionMethod {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            LowVisionMethod::CountingFingers => write!(f, "CF"),
-            LowVisionMethod::HandMovement => write!(f, "HM"),
-            LowVisionMethod::LightPerception => write!(f, "LP"),
-            LowVisionMethod::NoLightPerception => write!(f, "NLP"),
-        }
-    }
-}
-
-#[derive(Hash, Clone, Debug, PartialEq, Eq)]
 pub enum NotTakenReason {
     NT,
     Unable,
@@ -290,11 +129,12 @@ pub enum NotTakenReason {
 
 #[derive(Hash, Clone, Debug, PartialEq, Eq)]
 pub enum ParsedItem {
-    Snellen(SnellenRow),
-    Jaeger(JaegerRow),
-    Teller { row: u16, card: u16 },
-    ETDRS { letters: u32 },
-    LowVision { method: LowVisionMethod, distance: DistanceUnits },
+    SnellenFraction(String),
+    Jaeger(String),
+    TellerCard(String),
+    TellerCyCm(String),
+    ETDRS(String),
+    LowVision(String, DistanceUnits),
     PinHoleEffectItem(PinHoleEffect),
     BinocularFixation(FixationPreference),
     PlusLettersItem(i32),
@@ -314,19 +154,26 @@ pub enum ParsedItem {
 impl Display for ParsedItem {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let formatted = match self {
-            Snellen(row) => format!("20/{}", *row as u16),
-            Jaeger(row) => format!("{row:?}").replace("PLUS", "+"),
-            ETDRS{letters} => format!("{letters} letters"),
+            SnellenFraction(s)
+            | Jaeger(s)
+            | ETDRS(s)
+            | TellerCard(s)
+            | TellerCyCm(s) => {
+                s.to_string()
+            },
+            PlusLettersItem(n) => if *n > 0 { format!("+{self}") } else { format!("{n}") },
             PinHoleItem(effect) => format!("{effect:?}"),
-            Teller { card, .. } => format!("card {card:?}"),
-            LowVision { method, distance } => match distance.to_feet() {
-                Ok(feet) => format!("{method:?} @ {feet:?} feet"),
-                _ => format!("{method:?}")
+            LowVision(method, distance) => match distance.to_feet() {
+                Ok(feet) => format!("{method} @ {feet:?} feet"),
+                _ => format!("{method}")
             },
             PinHoleEffectItem(effect) => format!("{effect:?}"),
             BinocularFixation(preference) => format!("{preference:?}"),
             NotTakenItem(reason) => format!("{reason:?}"),
-            _ => format!(""),
+            DistanceItem(d) => format!("{d}"),
+            LateralityItem(l) => format!("{l}"),
+            CorrectionItem(c) => format!("{c}"),
+            Text(_) | Unhandled(_) => format!("[text]"), // No PHI leaking here!
         };
         write!(f, "{formatted}")
     }
@@ -335,13 +182,45 @@ impl Display for ParsedItem {
 impl ParsedItem {
     pub(crate) fn is_base(&self) -> bool {
         match self {
-            &Snellen { .. }
+            &SnellenFraction { .. }
                 | &Jaeger { .. }
-                | &Teller { .. }
+                // | &TellerCard { .. }
                 | &ETDRS { .. }
                 | &LowVision { .. } => true,
             _ => false,
         }
+    }
+
+    pub(crate) fn find_chart_row(&self) -> VisualAcuityResult<&ChartRow> {
+        let key = self.chart_row_key()?;
+        match ChartRow::find(&key) {
+            Some(chart_row) => Ok(chart_row),
+            None => Err(ChartRowNotFound(key)),
+        }
+    }
+
+    pub(crate) fn chart_row_key(&self) -> VisualAcuityResult<String> {
+        match self {
+            SnellenFraction(_)
+            | ETDRS { .. }
+            | TellerCard(_)
+            | TellerCyCm(_)
+            | Jaeger(_) => {
+                Ok(self.to_string())
+            },
+            LowVision(method,  ..) => {
+                Ok(method.to_string())
+            },
+            _ => Err(NoSnellenEquivalent(self.to_string()))
+        }
+    }
+
+    pub(crate) fn measurement_distance(&self) -> &DistanceUnits {
+        match self {
+            LowVision(_, distance) => distance,
+            _ => &NotProvided
+        }
+
     }
 }
 
@@ -396,10 +275,11 @@ impl ParsedItemCollection {
 
     pub fn method(&self) -> Method {
         self.get_one(|item| match item {
-            Snellen{ .. } => Some(Method::Snellen),
+            SnellenFraction { .. } => Some(Method::Snellen),
             Jaeger { .. } => Some(Method::Jaeger),
             ETDRS { .. } => Some(Method::ETDRS),
-            Teller { .. } => Some(Method::Teller),
+            TellerCard { .. } => Some(Method::Teller),
+            TellerCyCm { .. } => Some(Method::Teller),
             LowVision { .. } => Some(Method::LowVision),
             _ => None
         }).unwrap_or(Method::Unknown)
@@ -422,6 +302,12 @@ pub enum Laterality {
     OU
 }
 
+impl Display for Laterality {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum DistanceOfMeasurement {
     Error(VisualAcuityError),
@@ -429,6 +315,12 @@ pub enum DistanceOfMeasurement {
     Unknown,
     Near,
     Distance,
+}
+
+impl Display for DistanceOfMeasurement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
 }
 
 pub(crate) trait Disambiguate where Self: Default + Clone + Eq + Hash  {
@@ -481,6 +373,12 @@ pub enum Correction {
     SC,
 }
 
+impl Display for Correction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PinHole {
     Error(VisualAcuityError),
@@ -508,9 +406,10 @@ pub enum Method {
 impl From<ParsedItem> for Method {
     fn from(value: ParsedItem) -> Self {
         match value {
-            Snellen { .. } => Method::Snellen,
+            SnellenFraction { .. } => Method::Snellen,
             Jaeger { .. } => Method::Jaeger,
-            Teller { .. } => Method::Teller,
+            TellerCard { .. } => Method::Teller,
+            TellerCyCm { .. } => Method::Teller,
             ETDRS { .. } => Method::ETDRS,
             LowVision { .. } => Method::LowVision,
             PinHoleEffectItem(_) => Method::PinHole,

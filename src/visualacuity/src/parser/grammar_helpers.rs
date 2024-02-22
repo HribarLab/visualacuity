@@ -8,31 +8,45 @@ use itertools::traits::HomogeneousTuple;
 use lalrpop_util::ErrorRecovery;
 use lalrpop_util::lexer::Token;
 use lalrpop_util::ParseError::{UnrecognizedEof, UnrecognizedToken};
+use crate::charts::ChartRow;
 use crate::VisualAcuityError::ParseError;
 
 pub(crate) fn merge_consecutive_texts<'a>(items: Vec<Input<'a, ParsedItem>>) -> ParsedItemCollection {
     items.into_iter()
-        .map(|item| vec![item])
-        .reduce(|mut accum, mut next| {
-            let Input{content: a, left, .. } = accum.last().expect("86784!");
-            let next = next.pop().expect("aifewjo!");
-            let Input{content: b, right, .. } = &next;
-            let (left, right) = (*left, *right);
-            match (&a, &b) {
-                (&Text(..), &Text(..)) => {
-                    let Input{ input, .. } = accum.pop().unwrap();
-                    let content = Text(input[left..right].to_string());
-                    accum.push(Input { content, left, right, input })
-                }
-                _ => accum.push(next)
+        .map(validate)
+        .fold(vec![], |mut accum, next| {
+            let Some(prev) = accum.pop() else { accum.push(next); return accum; };
+            let to_append = match (&prev.content, &next.content) {
+                (Text(..), Text(..)) => vec![merge_text(prev, next)],
+                _ => vec![prev, next]
             };
+            to_append.into_iter()
+                .filter(|input| input != &Text("".to_string()))
+                .for_each(|input| accum.push(input));
             accum
         })
-        .unwrap_or(vec![])
         .into_iter()
-        .filter(|va| va != &Text("".to_string()))
         .map(|item| item.content)
         .collect()
+}
+
+fn validate<'a>(input: Input<'a, ParsedItem>) -> Input<'a, ParsedItem> {
+    /// Turn a ParsedItem back into ParsedItem::Text() if it's not a valid chart row
+    use ParsedItem::*;
+    match &input.content {
+        SnellenFraction(s)
+        | Jaeger(s)
+        => match ChartRow::find(&s) {
+            None => Input { content: Text(input.to_string()), ..input },
+            Some(_) => input
+        }
+        _ => input
+    }
+}
+
+fn merge_text<'a>(prev: Input<'a, ParsedItem>, next: Input<'a, ParsedItem>) -> Input<'a, ParsedItem> {
+    let merged = Input { left: prev.left, ..next};
+    Input { content: Text(merged.to_string()), ..merged}
 }
 
 pub(crate) fn extract_integers<T: HomogeneousTuple>(s: &str) -> Option<T>

@@ -1,15 +1,15 @@
-#[macro_use]
-extern crate num_derive;
 extern crate lalrpop_util;
 
 pub(crate) mod errors;
 pub(crate) mod parser;
 pub(crate) mod structure;
+mod distanceunits;
 mod logmar;
 mod snellen_equivalent;
 mod visit;
 mod cache;
 mod visitinput;
+mod charts;
 
 use itertools::Itertools;
 pub use visit::{Visit, VisitNote};
@@ -17,27 +17,10 @@ use visitinput::ColumnMerger;
 use crate::ParsedItem::*;
 use crate::VisualAcuityError::{*};
 use crate::cache::LruCacher;
-
-
 pub use crate::errors::{VisualAcuityError, VisualAcuityResult};
 
-pub use structure::{
-    Correction,
-    DistanceOfMeasurement,
-    FixationPreference,
-    Input,
-    JaegerRow,
-    Laterality,
-    LowVisionMethod,
-    DistanceUnits,
-    Method,
-    NotTakenReason,
-    ParsedItem,
-    ParsedItemCollection,
-    PinHole,
-    PinHoleEffect,
-    SnellenRow,
-};
+pub use structure::*;
+pub use distanceunits::*;
 pub use visitinput::{VisitInput};
 
 pub struct Parser {

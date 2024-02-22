@@ -10,8 +10,8 @@ pub enum VisualAcuityError {
     NotImplemented,
     LogMarInvalidSnellenRow(String),
     LogMarInvalidPlusLetters(String),
-    DistanceConversionError(String),
-    NoSnellenEquivalent,
+    DistanceConversionError,
+    NoSnellenEquivalent(String),
     PlusLettersNotAllowed,
     NoValue,
     MultipleValues(String),
@@ -19,6 +19,7 @@ pub enum VisualAcuityError {
     MultipleErrors(Vec<VisualAcuityError>),
     ExtractNumbersError(String),
     ChartNotFound(String),
+    ChartRowNotFound(String),
 }
 
 impl From<ParseIntError> for VisualAcuityError {

@@ -1,7 +1,6 @@
 use crate::*;
 use crate::parser::grammar_helpers::*;
 use crate::ParsedItem::*;
-use crate::LowVisionMethod::*;
 use crate::FixationPreference::*;
 use crate::VisualAcuityError::*;
 use crate::DistanceOfMeasurement::*;
@@ -10,20 +9,27 @@ use crate::Correction::*;
 use crate::DistanceOfMeasurement::*;
 
 use lalrpop_util::ParseError::*;
-use num_traits::FromPrimitive;
 
 grammar;
 
 ParseInt<T>: u64 = { T =>? <>.parse().map_err(|e| User { error: "Parse int error!" } ) };
 ParseFloat<T>: f64 = { T =>? <>.parse().map_err(|e| User { error: "Parse float error!" } ) };
-NumberFloat: f64 = { ParseFloat<_NumberFloat>, ParseFloat<_NumberInteger>, NumberFraction };
-Integer: u64 = { ParseInt<_NumberInteger> };
-Number: f64 = { NumberFloat };
+NumberFloat: f64 = {
+ ParseFloat<_NumberFloat>,
+ Integer => <> as f64,
+ // Numbers that we've used explicitly in the grammar must then be explicitly included as a NumberFloat here.
+ "6.0" => 6.0,
+};
+Integer: u64 = {
+ ParseInt<_NumberInteger>,
+ // Numbers that we've used explicitly in the grammar must then be explicitly included as an Integer here.
+ "20" => 20,
+ "6" => 6,
+};
 
-NumberFraction: f64 = {
-    "1/2" => 0.5,
-    <b:Integer> "1/2" => (b as f64) + 0.5,
-}
+pub(crate) Fraction: Fraction = {
+    <n:NumberFloat> "/" <d:NumberFloat> => Fraction((n, d)),
+};
 
 pub ChartNotes: ParsedItemCollection = {
     Input<VA>+ => merge_consecutive_texts(<>)
@@ -43,43 +49,31 @@ VA: ParsedItem = {
 }
 
 pub(crate) Snellen: ParsedItem = {
-    <SnellenFraction> => Snellen(<>.1)
+    SnellenFraction => SnellenFraction(<>),
 };
 
-pub(crate) SnellenFraction: (SnellenRow, SnellenRow) = {
-    _SnellenFraction => extract_integers(<>).unwrap(),
-    _SnellenEquivalentFraction => extract_integers(<>).unwrap(),
+pub(crate) SnellenFraction: String = {
+    <row:"20"> "/" <distance:NumberFloat> => format!("{row}/{distance}"),
+    <row:"6"> "/" <distance:NumberFloat> => format!("{row}/{distance}"),
 };
 
+J: &'input str = { "J", "j" };
 pub(crate) Jaeger: ParsedItem = {
-    <row:JaegerRow> => Jaeger(row),
-};
-
-pub(crate) JaegerRow: JaegerRow = {
-    _JaegerRow =>? <>.parse().map_err(|_| User{error: "Invalid Jaeger Row"})
-};
-
-pub(crate) Teller: ParsedItem = {
-    <f:TellerFraction> <cy_cm:TellerCyCm?> <card:TellerCardNumber?> => match (f, cy_cm, card) {
-        ((_, row), _, Some(card)) => Teller{ row, card },
-        ((_, row), _, _) => Teller{ row, card: 0 }
+    J <row:Integer> <plus:"+"?> => match (row, plus) {
+        (0, None) => Jaeger(format!("J1+")),
+        (_, None) => Jaeger(format!("J{row}")),
+        (_, Some(plus)) => Jaeger(format!("J{row}{plus}")),
     }
 };
 
-TellerFraction: (u16, u16) = {
-    _TellerFraction => extract_integers(<>).unwrap()
-};
 
-pub(crate) TellerCyCm: f64 = {
-    <cy_cm:NumberFloat> _CyCm => cy_cm
-};
-
-pub(crate) TellerCardNumber: u16 = {
-    _Card <n:Integer> => n as u16
+pub(crate) Teller: ParsedItem = {
+    <cy_cm:NumberFloat> _CyCm => TellerCyCm(format!("{cy_cm} cy/cm")),
+    _Card <n:Integer> => TellerCard(format!("Card {n}"))
 };
 
 pub(crate) ETDRS: ParsedItem = {
-    _ETDRS? <letters:NLetters> => ETDRS{letters},
+    _ETDRS? <n:NLetters> => ETDRS(format!("{n} letters")),
 };
 
 NLetters: u32 = {
@@ -87,12 +81,12 @@ NLetters: u32 = {
 };
 
 pub(crate) LowVision: ParsedItem = {
-    _CountingFingers <distance:DistanceUnits?> => LowVision{method: CountingFingers, distance: distance.unwrap_or_default() },
-    _HandMotion <distance:DistanceUnits?> => LowVision{method: HandMovement, distance: distance.unwrap_or_default() },
-    _LightPerception => LowVision{method: LightPerception, distance: DistanceUnits::NotProvided },
-    _NoLightPerception => LowVision{method: NoLightPerception, distance: DistanceUnits::NotProvided },
-    SensitiveToLight => LowVision{method: LightPerception, distance: DistanceUnits::NotProvided },
-    Negation SensitiveToLight => LowVision{method: NoLightPerception, distance: DistanceUnits::NotProvided },
+    _CountingFingers <distance:DistanceUnits?> => LowVision(format!("CF"), distance.unwrap_or_default() ),
+    _HandMotion <distance:DistanceUnits?> => LowVision(format!("HM"), distance.unwrap_or_default() ),
+    _LightPerception => LowVision(format!("LP"), DistanceUnits::NotProvided ),
+    _NoLightPerception => LowVision(format!("NLP"), DistanceUnits::NotProvided ),
+    SensitiveToLight => LowVision(format!("LP"), DistanceUnits::NotProvided ),
+    Negation SensitiveToLight => LowVision(format!("NLP"), DistanceUnits::NotProvided ),
     _PinHoleNoImprovement => PinHoleEffectItem(PinHoleEffect::NI),
 };
 
@@ -191,12 +185,13 @@ match {
     r#"[ \t\n\f,()]"# => {}, // Discard spaces and non-token symbols
 
     // Other tokens
+    "20",
+    "/",
+    "J",
+    "j",
+    "+",
     r#"\d+"# => _NumberInteger,
     r#"\d*\.\d+"# => _NumberFloat,
-    r#"20\s*/\s*(600|500|400|300|250|200|150|125|100|80|70|60|50|40|30|25|20|15)"# => _SnellenFraction,
-    r#"20\s*/\s*(800|640|320|160|63|32|12|10)"# => _SnellenEquivalentFraction,
-    r#"20\s*/\s*(2700|2000|1400|1000|670|540|360|270|180|130|89|66|45|33|23)"# => _TellerFraction,
-    r#"(?i)J\s*(1\+|\d+)"# => _JaegerRow,
     r#"[-+]\s*[1-6]"# => _PlusLetters,
 
     r#"(?i)card"# => _Card,
@@ -229,7 +224,7 @@ match {
     r#"(?i)HM(at|@)?"# => _HandMotion,
     r#"(?i)LP(at|@)?"# => _LightPerception,
     r#"(?i)NLP(at|@)?"# => _NoLightPerception,
-    //adversion|adverts|adverts|asverts|averse|aversion|aversive|averst|avert|avertion|averts head|averts|avets|avrtes|avters|bats|blibks|bliniks|blink intermittently|blinkd|bllinks|closes eye|closes eyes|dazzles|does not advert|does not avert|does not react|flinching|fusses|grimace|grimaces more|grimaces|grimmases|limited reaction|looks down|mild aversion|mild squint|objects|possible objection|protests|reactive|reacts|reflexes|refused bliks|resonds|responds|response|rxn|squints|waves left arm|whince|wicne|wince|winces|winch|withdraws
+
     r#"(?i)(OS|Left Eye)"# => _OS,
     r#"(?i)(OD|Right Eye)"# => _OD,
     r#"(?i)(OU|Both Eyes)"# => _OU,
@@ -257,7 +252,6 @@ match {
     //    averts head
 } else {
     r#"[,]|\p{Letter}+|\p{Symbol}|\p{Punctuation}"# => OtherToken,
-    r#"20\s*/\s*\d+"# => _UnexpectedSnellen,  // Make sure 20/321 doesn't get scooped up by 20/32
     _ // catch-all
 }
 

@@ -33,7 +33,7 @@ pub struct VisitNote {
     #[pyo3(get)]
     pub pinhole: PinHole,
 
-    snellen_equivalent: VisualAcuityResult<Option<(u16, u16)>>,
+    snellen_equivalent: VisualAcuityResult<Option<(f64, f64)>>,
     log_mar_base: VisualAcuityResult<Option<f64>>,
     log_mar_base_plus_letters: VisualAcuityResult<Option<f64>>,
 }
@@ -41,7 +41,7 @@ pub struct VisitNote {
 #[pymethods]
 impl VisitNote {
     #[getter]
-    fn snellen_equivalent(&self) -> PyResult<Option<(u16, u16)>> {
+    fn snellen_equivalent(&self) -> PyResult<Option<(f64, f64)>> {
         self.snellen_equivalent.clone()
             .or_else(|e| Err(PyValueError::new_err(format!("{:?}", e))))
     }
@@ -70,7 +70,7 @@ impl From<visualacuity::VisitNote> for VisitNote {
             pinhole: value.pinhole.into(),
             method: value.method.into(),
             extracted_value: value.extracted_value,
-            snellen_equivalent: value.snellen_equivalent,
+            snellen_equivalent: value.snellen_equivalent.map(|se| se.map(Into::into)),
             log_mar_base: value.log_mar_base,
             log_mar_base_plus_letters: value.log_mar_base_plus_letters,
             plus_letters: value.plus_letters.into()

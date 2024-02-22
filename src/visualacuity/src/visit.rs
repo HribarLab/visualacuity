@@ -5,7 +5,7 @@ use crate::{Correction, CorrectionItem, DistanceOfMeasurement, Laterality, Parse
 use crate::logmar::{LogMarBase, LogMarPlusLetters};
 use crate::ParsedItem::*;
 use crate::snellen_equivalent::SnellenEquivalent;
-use crate::structure::{Disambiguate, Method, PinHole};
+use crate::structure::{Disambiguate, Fraction, Method, PinHole};
 
 /// The public return type representing a parsed & processed set of EHR notes for a patient visit
 #[derive(IntoIterator, PartialEq, Debug, Clone)]
@@ -36,7 +36,7 @@ pub struct VisitNote {
     /// The "normalized" text describing the visual acuity observation
     pub extracted_value: String,
     /// The Snellen equivalent of the visual acuity (if available), expressed as a fraction
-    pub snellen_equivalent: VisualAcuityResult<Option<(u16, u16)>>,
+    pub snellen_equivalent: VisualAcuityResult<Option<Fraction>>,
     /// The LogMAR equivalent of the visual acuity (if available), not considering partial lines
     pub log_mar_base: VisualAcuityResult<Option<f64>>,
     /// The LogMAR equivalent of the visual acuity (if available), with consideration of partial lines
@@ -139,9 +139,10 @@ impl SiftedParsedItems {
         let mut result = Self::default();
         for item in [parsed_key, parsed_notes].into_iter().flatten() {
             match item {
-                Snellen { .. } => result.acuities.push(item),
+                SnellenFraction { .. } => result.acuities.push(item),
                 Jaeger { .. } => result.acuities.push(item),
-                Teller { .. } => result.acuities.push(item),
+                TellerCard { .. } => result.acuities.push(item),
+                TellerCyCm { .. } => result.acuities.push(item),
                 ETDRS { .. } => result.acuities.push(item),
                 LowVision { .. } => result.acuities.push(item),
                 PinHoleEffectItem { .. } => result.other_observations.push(item),
