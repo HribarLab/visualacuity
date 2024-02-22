@@ -12,6 +12,7 @@ mod visitinput;
 mod charts;
 
 use itertools::Itertools;
+use lazy_static::lazy_static;
 pub use visit::{Visit, VisitNote};
 use visitinput::ColumnMerger;
 use crate::ParsedItem::*;
@@ -21,21 +22,23 @@ pub use crate::errors::{VisualAcuityError, VisualAcuityResult};
 
 pub use structure::*;
 pub use distanceunits::*;
-pub use visitinput::{VisitInput};
+pub use visitinput::VisitInput;
 
 pub struct Parser {
-    notes_parser: parser::grammar::ChartNotesParser,
+    notes_parser: &'static ChartNotesParser,
     parse_cache: LruCacher<String, ParsedItemCollection>,
     column_merger: ColumnMerger
 }
 
 impl Parser {
     pub fn new() -> Self {
+        lazy_static!{
+            static ref CHART_NOTES_PARSER: ChartNotesParser = ChartNotesParser::new();
+        }
         let cache_size = 9999;
         let parse_cache = LruCacher::new(cache_size);
         let column_merger = ColumnMerger::new(cache_size);
-        let notes_parser = parser::grammar::ChartNotesParser::new();
-        Self { notes_parser, parse_cache, column_merger }
+        Self { notes_parser: &CHART_NOTES_PARSER, parse_cache, column_merger }
     }
 
     pub fn parse_visit(
