@@ -102,7 +102,7 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/config.toml
-          key: python-${{ matrix.python-version }}-${{ matrix.system.os }}-${{ matrix.system.target }}--${{ hashFiles('Cargo.toml', 'src/visualacuity/**') }}
+          key: python-${{ matrix.python-version }}-${{ matrix.system.os }}-${{ matrix.system.target }}--${{ hashFiles('Cargo.toml', 'src/visualacuity/**', 'src/visualacuity-python/**') }}
           restore-keys: rust-prebuild-${{ hashFiles('**/Cargo.toml') }}
 
       - name: "Maturin — wheel"
@@ -149,7 +149,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: "Download wheel"
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
           name: python-wheels
           path: dist
