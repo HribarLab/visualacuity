@@ -93,18 +93,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: "Cache"
-        uses: actions/cache@v4
-        continue-on-error: false
-        with:
-          path: |
-            target/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/config.toml
-          key: python-${{ matrix.python-version }}-${{ matrix.system.os }}-${{ matrix.system.target }}--${{ hashFiles('Cargo.toml', 'src/visualacuity/**', 'src/visualacuity-python/**') }}
-          restore-keys: rust-prebuild-${{ hashFiles('**/Cargo.toml') }}
-
       - name: "Maturin — wheel"
         uses: PyO3/maturin-action@v1
         with:
