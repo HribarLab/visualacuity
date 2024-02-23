@@ -1,6 +1,6 @@
 import unittest
 
-from helpers import close_enough_visit
+from .helpers import close_enough_visit
 from visualacuity import *
 
 

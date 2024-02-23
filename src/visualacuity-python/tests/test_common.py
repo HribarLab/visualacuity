@@ -3,7 +3,7 @@ import os
 import unittest
 from typing import Dict, List
 
-from helpers import close_enough_visit
+from .helpers import close_enough_visit
 from visualacuity import parse_visit, VisitNote, Method
 
 
