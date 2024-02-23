@@ -38,7 +38,6 @@ class TestVAInterface(unittest.TestCase):
         for line_number, input, expected_visit in _load_file(filename):
             input_plain_text = " ".join(input.values())
 
-
             with self.subTest(f"Line {line_number} - Parsing - {input_plain_text}"):
                 expected = close_enough_visit(expected_visit)
                 actual = close_enough_visit(parse_visit(input))
