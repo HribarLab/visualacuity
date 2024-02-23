@@ -98,12 +98,7 @@ jobs:
         with:
           target: ${{ matrix.system.target }}
           args:  --verbose --release --out dist --manifest-path ${{ env.VA_SRC_PYTHON }}/Cargo.toml --sdist
-          sccache: true
           manylinux: auto
-
-      - name: "Workaround for caching permission errors"
-        if: matrix.system.os == 'ubuntu-latest'
-        run: sudo chmod -R a+r target
 
       - name: "Upload"
         uses: actions/upload-artifact@v3
