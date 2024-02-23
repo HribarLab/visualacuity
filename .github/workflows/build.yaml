@@ -166,7 +166,7 @@ jobs:
         run: |
           pip install pytest pytest-subtests pytest-cov
           cd ${{ env.VA_SRC_PYTHON }}
-          pytest -m tests --doctest-modules --junitxml=reports/python-test-report.xml # --cov=com --cov-report=xml --cov-report=html
+          pytest ./tests --doctest-modules --junitxml=reports/python-test-report.xml # --cov=com --cov-report=xml --cov-report=html
 
   #      - name: "Test Report"
   #        if: success() || failure()
