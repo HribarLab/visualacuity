@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
+from numbers import Number
 from typing import List, Tuple, Optional, Dict
 
 
@@ -60,7 +61,7 @@ class VisitNote:
     method: Method = Method.UNKNOWN
     plus_letters: List[int] = field(default_factory=list)
     extracted_value: str = ""
-    snellen_equivalent: Optional[Tuple[int, int]] = None
+    snellen_equivalent: Optional[Tuple[Number, Number]] = None
     log_mar_base: Optional[float] = None
     log_mar_base_plus_letters: Optional[float] = None
 

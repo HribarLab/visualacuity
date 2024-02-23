@@ -1,11 +1,10 @@
 import csv
 import os
-import re
-import sys
 import unittest
 from typing import Dict, List
 
-from visualacuity import parse_visit
+from helpers import close_enough_visit
+from visualacuity import parse_visit, VisitNote, Method
 
 
 class TestVAInterface(unittest.TestCase):
@@ -13,127 +12,73 @@ class TestVAInterface(unittest.TestCase):
 
     def test_cases_conversions_tsv(self):
         filename = "common/test_cases_conversions.tsv"
-        test_cases = _load_file(filename)
 
-        for line_number, row in enumerate(test_cases, start=2):
-            if row["EHR Entry"].startswith("#"):  # Commented out
-                continue
+        for line_number, input, expected_visit in _load_file(filename):
+            input_plain_text = " ".join(input.values())
 
-            description = row.pop("Comment")
-            expect_snellen_equivalent = row.pop("Snellen Equivalent")
-            expect_logmar = row.pop("LogMAR Equivalent")
-            expect_logmar_base_plus_letters = row.pop("LogMAR Plus Letters")
-            input_plain_text = " ".join(row.values())
-            msg = f"`{input_plain_text}` ({os.path.basename(filename)}#{line_number})"
+            with self.subTest(f"Line {line_number} - {input_plain_text}"):
+                expected = close_enough_visit(expected_visit)
+                actual = close_enough_visit(parse_visit(input))
 
-            with self.subTest(f"Line {line_number} - Parsing - {input_plain_text}"):
-                output = parse_visit(row)
-                actual = output["EHR Entry"]
-
-            try:
-                print(
-                    f"{input_plain_text}\t"
-                    f"{actual.snellen_equivalent[0]}/{actual.snellen_equivalent[1]}\t"
-                    f"{actual.log_mar_base}\t"
-                    f"{actual.log_mar_base_plus_letters}\t",
-                    file=sys.stderr
-                )
-            except:
-                pass
-
-            with self.subTest(f"Line {line_number} - Snellen Equivalent - {input_plain_text}"):
-                if expect_snellen_equivalent != "Error":
-                    expect_snellen_equivalent = tuple(int(n) for n in expect_snellen_equivalent.split("/"))
-                self.assertEqual(
-                    expect_snellen_equivalent,
-                    actual.snellen_equivalent or "Error",
-                    msg=msg
+                expected, actual = (
+                    {
+                        # relevant values to compare
+                        "Snellen Equivalent": v.snellen_equivalent,
+                        "LogMAR Equivalent": v.log_mar_base,
+                        "LogMAR Plus Letters": v.log_mar_base_plus_letters,
+                    }
+                    for v in (expected["EHR Entry"], actual["EHR Entry"])
                 )
 
-            with self.subTest(f"Line {line_number} - LogMAR Equivalent - {input_plain_text}"):
-                expect_logmar = expect_logmar if expect_logmar == "Error" else float(expect_logmar)
-                self.assertAlmostEqual(
-                    expect_logmar,
-                    "Error" if actual.log_mar_base is None else actual.log_mar_base,
-                    places=2,
-                    msg=msg
-                )
-            with self.subTest(f"Line {line_number} - LogMAR - {input_plain_text}"):
-                self.assertAlmostEqual(
-                    _try_float(expect_logmar),
-                    _try_float(actual.log_mar_base),
-                    places=2,
-                    msg=msg
-                )
-
-            with self.subTest(f"Line {line_number} - LogMAR Plus Letters - {input_plain_text}"):
-                self.assertAlmostEqual(
-                    _try_float(expect_logmar_base_plus_letters),
-                    _try_float(actual.log_mar_base_plus_letters),
-                    places=2,
-                    msg=msg
-                )
+                self.assertEqual(actual, expected)
 
     def test_cases_parsing_tsv(self):
         filename = "common/test_cases_parsing.tsv"
-        test_cases = _load_file(filename)
 
-        for line_number, row in enumerate(test_cases, start=2):
-            if row["EHR Entry"].startswith("#"):  # Commented out
-                continue
+        for line_number, input, expected_visit in _load_file(filename):
+            input_plain_text = " ".join(input.values())
 
-            description = row.pop("Comment")
-            expect_method = row.pop("Method")
-            expect_extracted_value = row.pop("Extracted Value")
-            expect_plus_letters = row.pop("Plus Letters")
-            input_plain_text = " ".join(row.values())
-            msg = f"`{input_plain_text}` ({os.path.basename(filename)}#{line_number})"
 
             with self.subTest(f"Line {line_number} - Parsing - {input_plain_text}"):
-                output = parse_visit(row)
-                actual = output["EHR Entry"]
-
-            with self.subTest(f"Line {line_number} - Method - {input_plain_text}"):
-                self.assertEqual(
-                    expect_method,
-                    actual.method.value,
-                    msg=msg
+                expected = close_enough_visit(expected_visit)
+                actual = close_enough_visit(parse_visit(input))
+                expected, actual = (
+                    {
+                        # relevant values to compare
+                        "Method": v.method,
+                        "Extracted Value": v.extracted_value,
+                        "Plus Letters": v.plus_letters,
+                    }
+                    for v in (expected["EHR Entry"], actual["EHR Entry"])
                 )
 
-            with self.subTest(f"Line {line_number} - Extracted Value - {input_plain_text}"):
-                self.assertEqual(
-                    expect_extracted_value,
-                    actual.extracted_value,
-                    msg=msg
-                )
-
-            with self.subTest(f"Line {line_number} - Plus Letters - {input_plain_text}"):
-                expect_plus_letters = re.split(r"\s*,\s*", expect_plus_letters) if expect_plus_letters else []
-                expect_plus_letters = [int(n) for n in expect_plus_letters]
-                self.assertEqual(
-                    actual.plus_letters,
-                    expect_plus_letters,
-                    msg=msg
-                )
-
-    def assertAlmostEqual(self, first, second, *args, places=None, delta=None, **kwargs) -> None:
-        if type(first) == type(second):
-            super().assertAlmostEqual(first, second, *args, places=places, delta=delta, **kwargs)
-        else:
-            self.assertEqual(first, second, *args, **kwargs)
+                self.assertEqual(actual, expected)
 
 
 def _load_file(filename) -> List[Dict[str, str]]:
     path = os.path.join(os.path.dirname(__file__), filename)
     with open(path) as f:
         reader = csv.DictReader(f, dialect=csv.excel_tab)
-        return list(reader)
+        for line_number, row in enumerate(reader, start=2):
+            if row["EHR Entry"].startswith("#"):  # Commented out
+                continue
 
+            input = {
+                "EHR Entry": row["EHR Entry"],
+                "EHR Entry Plus": row["EHR Entry Plus"]
+            }
 
-def _try_float(value):
-    if isinstance(value, str):
-        value = value.lstrip("+")
-    try:
-        return float(value)
-    except:
-        return "Error"
+            expected_visit = {
+                "EHR Entry": VisitNote(
+                    text=row["EHR Entry"],
+                    text_plus=row["EHR Entry Plus"],
+                    plus_letters=row.get("Plus Letters", []),
+                    extracted_value=row.get("Extracted Value", ""),
+                    method=Method(row.get("Method", "Unknown")),
+                    snellen_equivalent=row.get("Snellen Equivalent", ""),
+                    log_mar_base=row.get("LogMAR Equivalent", ""),
+                    log_mar_base_plus_letters=row.get("LogMAR Plus Letters", ""),
+                )
+            }
+
+            yield line_number, input, expected_visit

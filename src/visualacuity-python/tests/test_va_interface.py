@@ -1,6 +1,6 @@
-import dataclasses
 import unittest
 
+from helpers import close_enough_visit
 from visualacuity import *
 
 
@@ -84,31 +84,9 @@ class TestVAInterface(unittest.TestCase):
             ),
             ({}, {}),
         ]
-        skip_fields = {"text", "text_plus"}
 
         for input, expected in test_cases:
-            actual = parse_visit(input)
-            expected = {
-                # Assume text is fine
-                key: dataclasses.replace(expected[key], text=val.text, text_plus=val.text_plus)
-                for key, val in actual.items()
-            }
-            for visit_key, actual_note in actual.items():
-                expected_note = expected[visit_key]
-                for field in dataclasses.fields(actual_note):
-                    if field.name in skip_fields:
-                        continue
-                    with self.subTest((input, f"visit[\"{visit_key}\"].{field.name}")):
+            expected = close_enough_visit(expected)
+            actual = close_enough_visit(parse_visit(input))
 
-                        expected_value = getattr(expected_note, field.name)
-                        actual_value = getattr(actual_note, field.name)
-
-                        if field.type == float:
-                            expected_value = f"{expected_value:.2f}"
-                            actual_value = f"{actual_value:.2f}"
-                        elif field.name == "snellen_equivalent":
-                            expected_value = "{:.2f}/{:.2f}".format(*expected_value)
-                            actual_value = "{:.2f}/{:.2f}".format(*actual_value)
-
-                        self.assertEqual(expected_value, actual_value)
-
+            self.assertEqual(actual, expected)
