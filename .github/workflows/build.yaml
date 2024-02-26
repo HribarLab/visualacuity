@@ -139,14 +139,12 @@ jobs:
 
       - name: "Install wheel"
         id: install
-        run: pip install visualacuity --find-links dist --force-reinstall --target=${{ env.VA_SRC_PYTHON }} --upgrade
+        run: pip install visualacuity --find-links dist --force-reinstall --upgrade
 
       - name: "Test with pytest"
         run: |
-          pip install pytest pytest-subtests pytest-cov
           cd ${{ env.VA_SRC_PYTHON }}
-          python -c "import visualacuity; print(visualacuity.parse_visit({'': 'cf @ 3ft'}))"
-          cat ./tests/common/test_cases_parsing.tsv | grep CF
+          pip install pytest pytest-subtests pytest-cov
           pytest ./tests --doctest-modules --junitxml=reports/python-test-report.xml # --cov=com --cov-report=xml --cov-report=html
 
   #      - name: "Test Report"
