@@ -100,7 +100,7 @@ jobs:
           path: dist/*
           key: python-dist-${{ matrix.system.os }}-${{ matrix.system.target }}-${{ hashFiles('src/**', 'Cargo.*') }}
 
-      - name: "Maturin — wheel"
+      - name: "Maturin — build wheel"
         uses: PyO3/maturin-action@v1
         if: ${{ steps.cache-dist.outputs.cache-hit != 'true' }}
         with:
