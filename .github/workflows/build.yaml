@@ -93,18 +93,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: "Cache"
-        uses: actions/cache@v4
-        continue-on-error: false
-        with:
-          path: |
-            target/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/config.toml
-          key: python-${{ matrix.python-version }}-${{ matrix.system.os }}-${{ matrix.system.target }}--${{ hashFiles('Cargo.toml', 'src/visualacuity/**', 'src/visualacuity-python/**') }}
-          restore-keys: rust-prebuild-${{ hashFiles('**/Cargo.toml') }}
-
       - name: "Maturin — wheel"
         uses: PyO3/maturin-action@v1
         with:
@@ -113,14 +101,10 @@ jobs:
           sccache: true
           manylinux: auto
 
-      - name: "Workaround for caching permission errors"
-        if: matrix.system.os == 'ubuntu-latest'
-        run: sudo chmod -R a+r target
-
       - name: "Upload"
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: python-wheels
+          name: python-wheels-${{ matrix.system.os }}-${{ matrix.system.architecture }}-${{ matrix.python-version }}
           path: dist
 
 
@@ -142,6 +126,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Only check out needed files to avoid python import conflicts
+          sparse-checkout: |
+            testing
+            ${{ env.VA_SRC_PYTHON }}/tests
 
       - name: "Set up Python ${{ matrix.python-version }}"
         uses: actions/setup-python@v5
@@ -149,19 +138,19 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: "Download wheel"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: python-wheels
+          merge-multiple: true
           path: dist
 
       - name: "Install wheel"
         id: install
-        run: pip install visualacuity --find-links dist --force-reinstall --target=${{ env.VA_SRC_PYTHON }} --upgrade
+        run: pip install visualacuity --find-links dist --force-reinstall --upgrade
 
       - name: "Test with pytest"
         run: |
-          pip install pytest pytest-subtests pytest-cov
           cd ${{ env.VA_SRC_PYTHON }}
+          pip install pytest pytest-subtests pytest-cov
           pytest ./tests --doctest-modules --junitxml=reports/python-test-report.xml # --cov=com --cov-report=xml --cov-report=html
 
   #      - name: "Test Report"
@@ -183,7 +172,7 @@ jobs:
       - name: "Download wheels"
         uses: actions/download-artifact@v4
         with:
-          name: python-wheels
+          merge-multiple: true
           path: dist
 
       - name: "Help (on no-publish)"
