@@ -140,7 +140,7 @@ jobs:
       - name: "Download wheel"
         uses: actions/download-artifact@v4
         with:
-          name: python-wheels-${{ matrix.system.os }}-${{ matrix.system.architecture }}-${{ matrix.python-version }}
+          merge-multiple: true
           path: dist
 
       - name: "Install wheel"
