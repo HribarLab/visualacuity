@@ -37,10 +37,20 @@ jobs:
             testing
             ${{ env.VA_SRC_PYTHON }}/tests
 
+      - name: "Set up Python ${{ matrix.python-version }}"
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: "Install wheel"
+        id: install
+        run: pip install visualacuity
+
       - name: "Test with pytest"
         run: |
-          python -c "import os; assert os.path.exists('src/visualacuity-python/tests')"
-          ls src/visualacuity-python/tests 
+          cd ${{ env.VA_SRC_PYTHON }}
+          pip install pytest pytest-subtests pytest-cov
+          pytest ./tests --doctest-modules --junitxml=reports/python-test-report.xml # --cov=com --cov-report=xml --cov-report=html
 
 #  vendor:
 #    name: "⚙️ Rust Pre-build ⚙️"
