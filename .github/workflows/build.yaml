@@ -106,7 +106,6 @@ jobs:
         with:
           target: ${{ matrix.system.target }}
           args:  --verbose --release --out dist --manifest-path ${{ env.VA_SRC_PYTHON }}/Cargo.toml --sdist
-          sccache: true
           manylinux: auto
 
       - name: "Upload"
