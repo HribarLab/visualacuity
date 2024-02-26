@@ -93,8 +93,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: "Cache"
+        id: cache-dist
+        uses: actions/cache@v4
+        with:
+          path: dist/*
+          key: python-dist-${{ matrix.system.target }}-${{ hashFiles('!.github/**') }}
+
       - name: "Maturin — wheel"
         uses: PyO3/maturin-action@v1
+        if: ${{ steps.cache-dist.outputs.cache-hit != 'true' }}
         with:
           target: ${{ matrix.system.target }}
           args:  --verbose --release --out dist --manifest-path ${{ env.VA_SRC_PYTHON }}/Cargo.toml --sdist
