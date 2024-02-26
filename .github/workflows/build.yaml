@@ -98,7 +98,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: dist/*
-          key: python-dist-${{ matrix.system.os }}-${{ matrix.system.target }}-${{ hashFiles('*', '!.github/**', '!dist/**') }}
+          key: python-dist-${{ matrix.system.os }}-${{ matrix.system.target }}-${{ hashFiles('src/**', 'Cargo.*') }}
 
       - name: "Maturin — wheel"
         uses: PyO3/maturin-action@v1
