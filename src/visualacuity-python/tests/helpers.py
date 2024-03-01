@@ -33,7 +33,7 @@ def try_float_list(value, precision=2):
             value = value.strip("[]")
             value = value.split(",") if len(value) else []
         value = [str(v).strip().lstrip("+") for v in value]
-        return [round(float(value), precision) for v in value]
+        return [round(float(v), precision) for v in value]
     except:
         return "Error"
 
