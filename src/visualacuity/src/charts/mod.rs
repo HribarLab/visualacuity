@@ -1,7 +1,6 @@
 pub use chart::{Chart, ChartRow};
 
 mod chart;
-mod scratch;
 
 
 #[cfg(test)]

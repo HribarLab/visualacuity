@@ -1,46 +1,55 @@
 use std::collections::BTreeMap;
-use std::fmt::Display;
 use lazy_static::lazy_static;
 use std::str::FromStr;
 use itertools::Itertools;
 use crate::{DistanceUnits, Fraction};
-use crate::VisualAcuityError::{ChartNotFound, LogMarInvalidSnellenRow, MultipleValues, ParseError};
+use crate::VisualAcuityError::{ChartNotFound, MultipleValues, ParseError};
 use crate::{VisualAcuityError, VisualAcuityResult};
+use crate::logmar::LogMarBase;
 
 lazy_static! {
-static ref PREDEFINED_CHARTS: BTreeMap<&'static str, Chart<'static>> = [
-        load_predefined("snellen", vec![
-            include_str!("../../assets/charts/snellen.feet.tsv"),
-        ]),
-        load_predefined("bailey-lovie", vec![
-            include_str!("../../assets/charts/bailey-lovie.feet.tsv"),
-            include_str!("../../assets/charts/bailey-lovie.meters.tsv"),
-        ]),
-        load_predefined("jaeger", vec![
-            include_str!("../../assets/charts/jaeger.tsv"),
-        ]),
-        load_predefined("teller", vec![
-            include_str!("../../assets/charts/teller.feet.tsv"),
-            include_str!("../../assets/charts/teller.cycm.tsv"),
-            include_str!("../../assets/charts/teller.card.tsv"),
-        ]),
-        load_predefined("schulze-bonzel", vec![
-            include_str!("../../assets/charts/schulze-bonzel.tnlv.tsv"),
-        ]),
-        load_predefined("etdrs", vec![
-            include_str!("../../assets/charts/etdrs.tsv"),
-        ]),
-    ].into_iter().try_collect().unwrap();
-static ref ORDERED_CHARTS: Vec<&'static Chart<'static>> = vec![
-        Chart::load("snellen").unwrap(),
-        Chart::load("bailey-lovie").unwrap(),
-        Chart::load("jaeger").unwrap(),
-        Chart::load("teller").unwrap(),
-        Chart::load("schulze-bonzel").unwrap(),
-        Chart::load("etdrs").unwrap(),
-];
+    // Pre-load data from the chart definition files in ../../assets/charts
+    static ref PREDEFINED_CHARTS: BTreeMap<&'static str, Chart<'static>> = [
+            load_predefined("snellen", vec![
+                include_str!("../../assets/charts/snellen.feet.tsv"),
+            ]),
+            load_predefined("bailey-lovie", vec![
+                include_str!("../../assets/charts/bailey-lovie.feet.tsv"),
+                include_str!("../../assets/charts/bailey-lovie.meters.tsv"),
+            ]),
+            load_predefined("jaeger", vec![
+                include_str!("../../assets/charts/jaeger.tsv"),
+            ]),
+            load_predefined("teller", vec![
+                include_str!("../../assets/charts/teller.feet.tsv"),
+                include_str!("../../assets/charts/teller.cycm.tsv"),
+                include_str!("../../assets/charts/teller.card.tsv"),
+            ]),
+            load_predefined("schulze-bonzel", vec![
+                include_str!("../../assets/charts/schulze-bonzel.tnlv.tsv"),
+            ]),
+            load_predefined("etdrs", vec![
+                include_str!("../../assets/charts/etdrs.tsv"),
+            ]),
+        ].into_iter().try_collect().unwrap();
+
+    // Establish an ordered lookup for the above charts. If a value occurs in multiple charts,
+    // prefer the first. This is hard-coded for now, but will probably become configurable
+    // by the API consumer as we come to understand what people need.
+    static ref ORDERED_CHARTS: Vec<&'static Chart<'static>> = vec![
+            Chart::load("snellen").unwrap(),
+            Chart::load("bailey-lovie").unwrap(),
+            Chart::load("jaeger").unwrap(),
+            Chart::load("teller").unwrap(),
+            Chart::load("schulze-bonzel").unwrap(),
+            Chart::load("etdrs").unwrap(),
+    ];
 }
 
+/// A `Chart` here is basically a ``data dictionary'' in which all the entries are related.
+/// Each entry is expected to have a `row_number`, which can be used to build logical
+/// relationships between the entries (e.g. for input text like "20/10 -2", computing LogMAR for
+/// partially-read lines requires information about two rows: 20/10 and 20/12.5)
 #[derive(Clone, PartialEq, Default, Debug)]
 pub struct Chart<'a> {
     by_row_number: BTreeMap<i8, ChartRow>,
@@ -48,6 +57,12 @@ pub struct Chart<'a> {
 }
 
 impl<'a> Chart<'a> {
+    /// Retrieve a `ChartRow` by its normalized "data dictionary" text
+    pub(crate) fn get_row<S: ToString>(&self, text: S) -> Option<&ChartRow> {
+        self.by_text.get(&*text.to_string())
+    }
+
+    /// Load a `Chart` from the contents of a TSV file
     pub(crate) fn load(name: &'a str) -> VisualAcuityResult<&Self> {
         match PREDEFINED_CHARTS.get(name) {
             Some(chart) => Ok(chart),
@@ -57,10 +72,6 @@ impl<'a> Chart<'a> {
                 Err(ChartNotFound(name.to_string()))
             }
         }
-    }
-
-    pub(crate) fn get_row<S: ToString>(&self, text: S) -> Option<&ChartRow> {
-        self.by_text.get(&*text.to_string())
     }
 
     pub(crate) fn parse_files(contents: Vec<(&'a str, &'a str)>) -> VisualAcuityResult<Self> {
@@ -101,7 +112,9 @@ impl<'a> Chart<'a> {
     }
 }
 
-
+/// A `ChartRow` is a single entry in a `Chart`, and one line from a TSV file. Additional
+/// information about adjacent lines is precomputed here for easy access, namely `prev_log_mar`,
+/// `next_log_mar`, and `next_n_letters`.
 #[derive(Clone, PartialEq, Debug)]
 pub struct ChartRow {
     pub(crate) chart_name: String,
@@ -115,36 +128,13 @@ pub struct ChartRow {
     pub(crate) next_n_letters: Option<u8>
 }
 
-pub(crate) trait Stringish: ToString + Display + Ord {}
-impl Stringish for &str {}
-impl Stringish for String {}
-impl Stringish for &String {}
-
 impl ChartRow {
+    /// Static lookup for a chart row by normalized text, searching all pre-loaded `Chart`
+    /// definitions. Chart priority is specified in `ORDERED_CHARTS` above.
     pub(crate) fn find<'a, S: ToString>(value: &S) -> Option<&'a Self> {
         ORDERED_CHARTS.iter()
             .filter_map(|chart| chart.get_row(value.to_string().as_str().trim()))
             .next()
-    }
-
-    pub(crate) fn log_mar_increment(&self, plus_letters: i32) -> VisualAcuityResult<f64> {
-        if plus_letters == 0 {
-            Ok(0.0)
-        }
-        else if plus_letters > 0 {
-            let e = || Err(LogMarInvalidSnellenRow(format!("Missing next row values: {self:?}")));
-            let Some(log_mar) = self.log_mar else { return e(); };
-            let Some(next_log_mar) = self.next_log_mar else { return e(); };
-            let Some(next_n_letters) = self.next_n_letters else { return e(); };
-            Ok((next_log_mar - log_mar) / next_n_letters as f64)
-        }
-        else {
-            let e = || Err(LogMarInvalidSnellenRow(format!("Missing previous row values: {self:?}")));
-            let Some(log_mar) = self.log_mar else { return e(); };
-            let Some(prev_log_mar) = self.prev_log_mar else { return e(); };
-            let Some(n_letters) = self.n_letters else { return e(); };
-            Ok((log_mar - prev_log_mar) / n_letters as f64)
-        }
     }
 }
 
@@ -183,10 +173,9 @@ fn nonempty(s: Option<&str>) -> Option<&str> {
 
 fn fill_in_log_mar(fraction: Option<Fraction>, log_mar: Option<f64>) -> VisualAcuityResult<(Option<Fraction>, Option<f64>)> {
     match (fraction, log_mar) {
-        (Some(Fraction((n, d))), None) => Ok((Some(Fraction((n, d))), Some(-(n / d).log10()))),
+        (Some(fraction), None) => Ok((Some(fraction), Some(fraction.log_mar_base()?))),
         _ => Ok((fraction, log_mar))
     }
-
 }
 
 
