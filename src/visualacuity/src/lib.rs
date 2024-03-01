@@ -11,6 +11,9 @@ mod cache;
 mod visitinput;
 mod charts;
 
+#[cfg(test)]
+mod tests;
+
 use itertools::Itertools;
 use lazy_static::lazy_static;
 pub use visit::{Visit, VisitNote};

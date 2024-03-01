@@ -9,4 +9,3 @@ pub(crate) grammar, "/parser/grammar.rs"
 );
 
 mod grammar_helpers;
-mod test;
