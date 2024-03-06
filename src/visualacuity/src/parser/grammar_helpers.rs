@@ -9,6 +9,7 @@ use lalrpop_util::ErrorRecovery;
 use lalrpop_util::lexer::Token;
 use lalrpop_util::ParseError::{UnrecognizedEof, UnrecognizedToken};
 use crate::charts::ChartRow;
+use crate::parser::decorator::Expression;
 use crate::VisualAcuityError::ParseError;
 
 pub(crate) fn merge_consecutive_texts<'a>(items: Vec<Input<'a, ParsedItem>>) -> ParsedItemCollection {
@@ -34,8 +35,8 @@ fn validate<'a>(input: Input<'a, ParsedItem>) -> Input<'a, ParsedItem> {
     /// Turn a ParsedItem back into ParsedItem::Text() if it's not a valid chart row
     use ParsedItem::*;
     match &input.content {
-        SnellenFraction(s)
-        | Jaeger(s)
+        SnellenFraction(Expression { converted: s, .. })
+        | Jaeger(Expression { converted: s, .. })
         => match ChartRow::find(&s) {
             None => Input { content: Text(input.to_string()), ..input },
             Some(_) => input
@@ -72,7 +73,7 @@ pub(crate) fn extract_floats<T: HomogeneousTuple>(s: &str) -> VisualAcuityResult
 }
 
 pub(crate) fn extract_float<T>(s: &str) -> VisualAcuityResult<T>
-    where T: FromStr + Debug, <T as FromStr>::Err: Debug
+    where T: FromStr + ToString, <T as FromStr>::Err: Debug
 {
     Ok(iter_decimals(s).exactly_one()?)
 }

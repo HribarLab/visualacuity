@@ -12,6 +12,7 @@ use crate::ParsedItem::*;
 use crate::VisualAcuityError::*;
 use crate::charts::ChartRow;
 use crate::DistanceUnits::NotProvided;
+use crate::parser::Expression;
 
 lazy_static! {
 static ref PATTERN_FRACTION: Regex = Regex::new(r"^\s*(\d+(?:\.\d*)?)\s*/\s*(\d+(?:\.\d*)?)\s*$").expect("");
@@ -129,12 +130,12 @@ pub enum NotTakenReason {
 
 #[derive(Hash, Clone, Debug, PartialEq, Eq)]
 pub enum ParsedItem {
-    SnellenFraction(String),
-    Jaeger(String),
-    TellerCard(String),
-    TellerCyCm(String),
-    ETDRS(String),
-    LowVision(String, DistanceUnits),
+    SnellenFraction(Expression),
+    Jaeger(Expression),
+    TellerCard(Expression),
+    TellerCyCm(Expression),
+    ETDRS(Expression),
+    LowVision(Expression, DistanceUnits),
     PinHoleEffectItem(PinHoleEffect),
     BinocularFixation(FixationPreference),
     PlusLettersItem(i32),
@@ -208,8 +209,8 @@ impl ParsedItem {
             | Jaeger(_) => {
                 Ok(self.to_string())
             },
-            LowVision(method,  ..) => {
-                Ok(method.to_string())
+            LowVision(s,  ..) => {
+                Ok(s.to_string())
             },
             _ => Err(NoSnellenEquivalent(self.to_string()))
         }
@@ -233,7 +234,7 @@ impl ParsedItemCollection {
     pub fn len(&self) -> usize { self.0.len() }
 
     fn get_one<T, F>(&self, f: F) -> VisualAcuityResult<T>
-        where T: Clone + Debug, F: FnMut(&ParsedItem) -> Option<T>
+        where T: Clone + ToString, F: FnMut(&ParsedItem) -> Option<T>
     {
         Ok(self.iter().filter_map(f).exactly_one()?.into())
     }
@@ -388,6 +389,13 @@ pub enum PinHole {
     Without,
 }
 
+
+impl Display for PinHole {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Method {
     Error(VisualAcuityError),
@@ -417,5 +425,11 @@ impl From<ParsedItem> for Method {
             NotTakenItem(_) => Method::NotTaken,
             _ => Method::Unknown,
         }
+    }
+}
+
+impl Display for Method {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
     }
 }

@@ -1,5 +1,6 @@
 use crate::*;
 use crate::parser::grammar_helpers::*;
+use crate::parser::decorator::*;
 use crate::ParsedItem::*;
 use crate::FixationPreference::*;
 use crate::VisualAcuityError::*;
@@ -49,7 +50,7 @@ VA: ParsedItem = {
 }
 
 pub(crate) Snellen: ParsedItem = {
-    SnellenFraction => SnellenFraction(<>),
+    Converted<SnellenFraction> => SnellenFraction(<>),
 };
 
 pub(crate) SnellenFraction: String = {
@@ -57,42 +58,54 @@ pub(crate) SnellenFraction: String = {
     <row:"6"> "/" <distance:NumberFloat> => format!("{row}/{distance}"),
 };
 
-J: &'input str = { "J", "j" };
 pub(crate) Jaeger: ParsedItem = {
+    Converted<JaegerRow> => Jaeger(<>),
+}
+
+J: &'input str = { "J", "j" };
+JaegerRow: String = {
     J <row:Integer> <plus:"+"?> => match (row, plus) {
-        (0, None) => Jaeger(format!("J1+")),
-        (_, None) => Jaeger(format!("J{row}")),
-        (_, Some(plus)) => Jaeger(format!("J{row}{plus}")),
+        (0, None) => format!("J1+"),
+        (_, None) => format!("J{row}"),
+        (_, Some(plus)) => format!("J{row}{plus}"),
     }
 };
 
 
+TellerCyCm: String = { <cy_cm:NumberFloat> _CyCm => format!("{cy_cm} cy/cm") };
+TellerCard: String = { _Card <n:Integer> => format!("Card {n}") };
+
 pub(crate) Teller: ParsedItem = {
-    <cy_cm:NumberFloat> _CyCm => TellerCyCm(format!("{cy_cm} cy/cm")),
-    _Card <n:Integer> => TellerCard(format!("Card {n}"))
+    Converted<TellerCyCm> => TellerCyCm(<>),
+    Converted<TellerCard> => TellerCard(<>)
 };
+
+NLetters: u32 = { _NLetters => { let (n, ) = extract_integers(<>).unwrap(); n } };
+ETDRSPhrase: String = { <n:NLetters> => format!("{n} letters") };
 
 pub(crate) ETDRS: ParsedItem = {
-    _ETDRS? <n:NLetters> => ETDRS(format!("{n} letters")),
+    _ETDRS? <c:Converted<ETDRSPhrase>> => ETDRS(c),
 };
 
-NLetters: u32 = {
-    _NLetters => { let (n, ) = extract_integers(<>).unwrap(); n }
+
+CF: String = { String<_CountingFingers> };
+HM: String = { String<_HandMotion> };
+LP: String = {
+    String<_LightPerception>,
+    String<_SensitiveToLight>,
+    _Sensitive _ToLight => input.to_string(),
 };
+NLP = {
+    String<_NoLightPerception>,
+    Negation _SensitiveToLight => input.to_string()
+}
 
 pub(crate) LowVision: ParsedItem = {
-    _CountingFingers <distance:DistanceUnits?> => LowVision(format!("CF"), distance.unwrap_or_default() ),
-    _HandMotion <distance:DistanceUnits?> => LowVision(format!("HM"), distance.unwrap_or_default() ),
-    _LightPerception => LowVision(format!("LP"), DistanceUnits::NotProvided ),
-    _NoLightPerception => LowVision(format!("NLP"), DistanceUnits::NotProvided ),
-    SensitiveToLight => LowVision(format!("LP"), DistanceUnits::NotProvided ),
-    Negation SensitiveToLight => LowVision(format!("NLP"), DistanceUnits::NotProvided ),
+    <method:Converted<CF>> <distance:DistanceUnits?> => LowVision(method.rewrite("CF"), distance.unwrap_or_default() ),
+    <method:Converted<HM>> <distance:DistanceUnits?> => LowVision(method.rewrite("HM"), distance.unwrap_or_default() ),
+    <method:Converted<LP>> => LowVision(method.rewrite("LP"), DistanceUnits::NotProvided ),
+    <method:Converted<NLP>> => LowVision(method.rewrite("NLP"), DistanceUnits::NotProvided ),
     _PinHoleNoImprovement => PinHoleEffectItem(PinHoleEffect::NI),
-};
-
-SensitiveToLight: () = {
-    _SensitiveToLight => (),
-    _Sensitive _ToLight => (),
 };
 
 BinocularFixation: ParsedItem = {
@@ -220,10 +233,14 @@ match {
 
     r#"(?i)ETDRS"# => _ETDRS,
     r#"(?i)([0-8]?\d|9[0-5])\s*(letters|ltt?rs)"# => _NLetters,  // 0-95 letters
-    r#"(?i)CF(at|@)?"# => _CountingFingers,
-    r#"(?i)HM(at|@)?"# => _HandMotion,
-    r#"(?i)LP(at|@)?"# => _LightPerception,
-    r#"(?i)NLP(at|@)?"# => _NoLightPerception,
+//    r#"(?i)CF(at|@)?"# => _CountingFingers,
+//    r#"(?i)HM(at|@)?"# => _HandMotion,
+//    r#"(?i)LP(at|@)?"# => _LightPerception,
+//    r#"(?i)NLP(at|@)?"# => _NoLightPerception,
+    r#"(?i)CF"# => _CountingFingers,
+    r#"(?i)HM"# => _HandMotion,
+    r#"(?i)LP"# => _LightPerception,
+    r#"(?i)NLP"# => _NoLightPerception,
 
     r#"(?i)(OS|Left Eye)"# => _OS,
     r#"(?i)(OD|Right Eye)"# => _OD,
@@ -258,4 +275,12 @@ match {
 Input<T>: Input<'input, T> = {
     // Macro to give us handy access to inputs etc.
     <left:@L> <content:T> <right:@R> => Input{content, left, right, input }
+};
+
+Converted<String>: Expression = {
+    <left:@L> <content:String> <right:@R> => Expression::new(&input[left..right]).rewrite(content)
+};
+
+String<T>: String = {
+    T => <>.to_string()
 };

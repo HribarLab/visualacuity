@@ -9,3 +9,6 @@ pub(crate) grammar, "/parser/grammar.rs"
 );
 
 mod grammar_helpers;
+mod decorator;
+
+pub(crate) use decorator::Expression;

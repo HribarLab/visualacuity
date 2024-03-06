@@ -44,13 +44,17 @@ impl<T: Clone + Into<VisualAcuityError>> From<&T> for VisualAcuityError {
     fn from(value: &T) -> Self { value.clone().into() }
 }
 
-impl<I: Iterator<Item=T>, T: Debug> From<ExactlyOneError<I>> for VisualAcuityError {
+impl<I: Iterator<Item=T>, T: ToString> From<ExactlyOneError<I>> for VisualAcuityError {
     fn from(value: ExactlyOneError<I>) -> Self {
         let mut it = value.into_iter();
         match it.next() {
             Some(item) => {
-                let items = [item].into_iter().chain(it).collect::<Vec<_>>();
-                VisualAcuityError::MultipleValues(format!("{items:?}"))
+                let formatted = [item].into_iter()
+                    .chain(it)
+                    .map(|it| it.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                VisualAcuityError::MultipleValues(format!("[{formatted}]"))
             },
             None => VisualAcuityError::NoValue
         }
