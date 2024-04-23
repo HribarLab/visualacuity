@@ -8,7 +8,7 @@ crate-type = ["cdylib", "lib", "staticlib"]
 name = 'visualacuity'
 
 [build-dependencies]
-lalrpop = "0.20.0"
+lalrpop = { version = "0.20.0", features = ["unicode"] }
 
 [dependencies]
 lazy_static = "1.4.0"
