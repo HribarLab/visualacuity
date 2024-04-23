@@ -49,15 +49,18 @@ impl DistanceUnits {
     }
 }
 
-lazy_static! {
-static ref PATTERN_DISTANCE: Regex = Regex::new(r"^\s*(\d+(?:\.\d*)?)\s*(cm|ft).*$").expect("");
-}
-
 impl FromStr for DistanceUnits {
     type Err = VisualAcuityError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         // Simplified distance parsing for the chart config files
+
+        lazy_static! {
+            static ref PATTERN_DISTANCE: Regex = Regex::new(
+                r"^\s*(\d+(?:\.\d*)?)\s*(cm|ft).*$"
+            ).expect("");
+        }
+
         let e = || Err(ParseError(s.to_string()));
         PATTERN_DISTANCE.captures(s)
             .and_then(|c| Some((c.get(1)?.as_str(), c.get(2)?.as_str())))
