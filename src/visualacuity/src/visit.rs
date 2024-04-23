@@ -141,8 +141,7 @@ impl SiftedParsedItems {
             match item {
                 SnellenFraction { .. } => result.acuities.push(item),
                 Jaeger { .. } => result.acuities.push(item),
-                TellerCard { .. } => result.acuities.push(item),
-                TellerCyCm { .. } => result.acuities.push(item),
+                Teller { .. } => result.acuities.push(item),
                 ETDRS { .. } => result.acuities.push(item),
                 LowVision { .. } => result.acuities.push(item),
                 PinHoleEffectItem { .. } => result.other_observations.push(item),

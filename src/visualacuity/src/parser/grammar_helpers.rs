@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 use std::str::FromStr;
-use crate::{Input, ParsedItem, ParsedItemCollection, VisualAcuityResult};
+use crate::{ParsedItem, ParsedItemCollection, VisualAcuityResult};
 use crate::ParsedItem::{Text, Unhandled};
 
 use itertools::Itertools;
@@ -9,10 +9,10 @@ use lalrpop_util::ErrorRecovery;
 use lalrpop_util::lexer::Token;
 use lalrpop_util::ParseError::{UnrecognizedEof, UnrecognizedToken};
 use crate::charts::ChartRow;
-use crate::parser::decorator::Expression;
+use crate::parser::decorator::Content;
 use crate::VisualAcuityError::ParseError;
 
-pub(crate) fn merge_consecutive_texts<'a>(items: Vec<Input<'a, ParsedItem>>) -> ParsedItemCollection {
+pub(crate) fn merge_consecutive_texts<'a>(items: Vec<Content<'a, ParsedItem>>) -> ParsedItemCollection {
     items.into_iter()
         .map(validate)
         .fold(vec![], |mut accum, next| {
@@ -31,36 +31,35 @@ pub(crate) fn merge_consecutive_texts<'a>(items: Vec<Input<'a, ParsedItem>>) -> 
         .collect()
 }
 
-fn validate<'a>(input: Input<'a, ParsedItem>) -> Input<'a, ParsedItem> {
+fn validate<'a>(input: Content<'a, ParsedItem>) -> Content<'a, ParsedItem> {
     /// Turn a ParsedItem back into ParsedItem::Text() if it's not a valid chart row
     use ParsedItem::*;
     match &input.content {
-        SnellenFraction(Expression { converted: s, .. })
-        | Jaeger(Expression { converted: s, .. })
-        => match ChartRow::find(&s) {
-            None => Input { content: Text(input.to_string()), ..input },
-            Some(_) => input
-        }
-        _ => input
+        SnellenFraction(s)
+        | Jaeger(s)
+        | Teller(s)
+        | ETDRS(s)
+        | LowVision(s, _)
+            => match ChartRow::find(s) {
+                None => input.map(|_| Text(input.input_string())),
+                Some(_) => input
+            }
+        PinHoleEffectItem(_) => input,
+        BinocularFixation(_) => input,
+        PlusLettersItem(_) => input,
+        NotTakenItem(_) => input,
+        DistanceItem(_) => input,
+        LateralityItem(_) => input,
+        CorrectionItem(_) => input,
+        PinHoleItem(_) => input,
+        Text(_) => input,
+        Unhandled(_) => input,
     }
 }
 
-fn merge_text<'a>(prev: Input<'a, ParsedItem>, next: Input<'a, ParsedItem>) -> Input<'a, ParsedItem> {
-    let merged = Input { left: prev.left, ..next};
-    Input { content: Text(merged.to_string()), ..merged}
-}
-
-pub(crate) fn extract_integers<T: HomogeneousTuple>(s: &str) -> Option<T>
-    where T::Item: FromStr, <T::Item as FromStr>::Err: Debug
-{
-    iter_integer(s).next_tuple()
-}
-
-fn iter_integer<T: FromStr>(s: &str) -> impl Iterator<Item=T> + '_ {
-    s.split(|c: char| !c.is_numeric())
-        .filter(|&s| s != "")
-        .filter_map(|s| s.parse::<T>().ok())
-        .into_iter()
+fn merge_text<'a>(prev: Content<'a, ParsedItem>, next: Content<'a, ParsedItem>) -> Content<'a, ParsedItem> {
+    let merged = Content { left: prev.left, ..next};
+    Content { content: Text(merged.to_string()), ..merged}
 }
 
 pub(crate) fn extract_floats<T: HomogeneousTuple>(s: &str) -> VisualAcuityResult<T>
@@ -85,28 +84,27 @@ fn iter_decimals<T: FromStr>(s: &str) -> impl Iterator<Item=T> + '_ {
         .into_iter()
 }
 
-pub(crate) fn handle_error<'a>(boxed_value: Input<'a, ErrorRecovery<usize, Token, &'a str>>) -> ParsedItem {
-    let text = boxed_value.input[boxed_value.left..boxed_value.right].to_string();
+pub(crate) fn handle_error<'a>(boxed_value: Content<'a, ErrorRecovery<usize, Token, &'a str>>) -> Content<'a, ParsedItem> {
     match boxed_value.content.error {
-        UnrecognizedEof { .. } => Text(text),
-        UnrecognizedToken { .. } => Text(text),
-        _ => Unhandled(format!("{:?}", boxed_value.content)),
+        UnrecognizedEof { .. } => boxed_value.map(|_| Text(boxed_value.input_string())),
+        UnrecognizedToken { .. } => boxed_value.map(|_| Text(boxed_value.input_string())),
+        _ => boxed_value.map(|error_recovery| Unhandled(format!("{:?}", error_recovery))),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::Input;
     use crate::parser::grammar_helpers::merge_consecutive_texts;
     use crate::ParsedItem::*;
+    use crate::parser::decorator::{Content, DataQuality};
 
     #[test]
     fn test_merge_texts() {
         let test_cases = [
             (
                 vec![
-                    Input { content: Text("asdf".to_string()), left: 0, right: 4, input: "asdf qwerty" },
-                    Input { content: Text("qwerty".to_string()), left: 5, right: 11, input: "asdf qwerty" },
+                    Content { content: Text("asdf".to_string()), left: 0, right: 4, input: "asdf qwerty", dq: DataQuality::Unrecognized },
+                    Content { content: Text("qwerty".to_string()), left: 5, right: 11, input: "asdf qwerty", dq: DataQuality::Unrecognized },
                 ],
                 vec![
                     Text("asdf qwerty".to_string()),

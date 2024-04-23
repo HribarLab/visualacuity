@@ -11,182 +11,208 @@ use crate::DistanceOfMeasurement::*;
 
 use lalrpop_util::ParseError::*;
 
-grammar;
+// The `orig` argument is added to support case-insensitive parsing. In practice, we parse on a lowercased version of
+// the input text, while retaining the original in `orig`.
+grammar(orig: &'input str);
 
+
+// NUMBERS
+// Regular expressions account for most numbers, but whenever a grammar rule references an explicit numeric string (e.g.
+// "20") we need to add it below, lest it become inaccessible to other rules using these generic Number tokens.
+// TODO: can we add a unit test that enforces this?
 ParseInt<T>: u64 = { T =>? <>.parse().map_err(|e| User { error: "Parse int error!" } ) };
 ParseFloat<T>: f64 = { T =>? <>.parse().map_err(|e| User { error: "Parse float error!" } ) };
 NumberFloat: f64 = {
- ParseFloat<_NumberFloat>,
- Integer => <> as f64,
- // Numbers that we've used explicitly in the grammar must then be explicitly included as a NumberFloat here.
- "6.0" => 6.0,
+    ParseFloat<r#"\d*\.\d+"#>,
+    Integer => <> as f64,
+    // Numbers that we've used explicitly in the grammar must then be explicitly included as a NumberFloat here.
+    ParseFloat<"6.0">,
 };
 Integer: u64 = {
- ParseInt<_NumberInteger>,
- // Numbers that we've used explicitly in the grammar must then be explicitly included as an Integer here.
- "20" => 20,
- "6" => 6,
+    ParseInt<r#"\d+"#>,
+    // Numbers that we've used explicitly in the grammar must then be explicitly included as an Integer here.
+    ParseInt<"20">,
+    ParseInt<"6">,
 };
 
-pub(crate) Fraction: Fraction = {
-    <n:NumberFloat> "/" <d:NumberFloat> => Fraction((n, d)),
-};
+// A few common token groups
+Negation = { "no", "not" }
+OtherToken = { r#"\p{Letter}+"#, r#"\p{Symbol}"#, r#"\p{Punctuation}"# };
 
+
+// Top-level chart notes. Uses a helper function to merge consecutive "Text()" elements
 pub ChartNotes: ParsedItemCollection = {
-    Input<VA>+ => merge_consecutive_texts(<>)
-}
-
-VA: ParsedItem = {
-    Snellen,
-    Jaeger,
-    Teller,
-    PlusLetters,
-    LowVision,
-    BinocularFixation,
-    NotTaken,
-    ETDRS,
-    VisitInfo,
-    Input<!> => handle_error(<>)
-}
-
-pub(crate) Snellen: ParsedItem = {
-    Converted<SnellenFraction> => SnellenFraction(<>),
+    VA+ => merge_consecutive_texts(<>)
 };
 
-pub(crate) SnellenFraction: String = {
-    <row:"20"> "/" <distance:NumberFloat> => format!("{row}/{distance}"),
-    <row:"6"> "/" <distance:NumberFloat> => format!("{row}/{distance}"),
+// Each type of `ParsedItem`, decorated with data quality annotations
+pub(crate) VA: Content<'input, ParsedItem> = {
+    DQExact<LowVisionExact>,
+    DQExact<SnellenExact>,
+    DQExact<JaegerExact>,
+    DQExact<ETDRSExact>,
+    DQConvertible<LowVisionConvertible>,
+    DQConvertible<JaegerConvertible>,
+    DQUnrecognized<TellerExact>,
+    DQUnrecognized<PlusLetters>,
+    DQUnrecognized<LowVision>,
+    DQUnrecognized<BinocularFixation>,
+    DQUnrecognized<NotTaken>,
+    DQUnrecognized<VisitInfo>,
+    DQUnrecognized<OtherToken> => <>.map(|t| Text(t.to_string())),
+    DQUnrecognized<!> => handle_error(<>)
 };
 
-pub(crate) Jaeger: ParsedItem = {
-    Converted<JaegerRow> => Jaeger(<>),
-}
-
-J: &'input str = { "J", "j" };
-JaegerRow: String = {
-    J <row:Integer> <plus:"+"?> => match (row, plus) {
-        (0, None) => format!("J1+"),
-        (_, None) => format!("J{row}"),
-        (_, Some(plus)) => format!("J{row}{plus}"),
-    }
+// SNELLEN
+pub(crate) SnellenExact: ParsedItem = {
+    <row:"20"> "/" <distance:NumberFloat> => SnellenFraction(format!("{row}/{distance}")),
+    <row:"6"> "/" <distance:NumberFloat> => SnellenFraction(format!("{row}/{distance}")),
 };
 
-
-TellerCyCm: String = { <cy_cm:NumberFloat> _CyCm => format!("{cy_cm} cy/cm") };
-TellerCard: String = { _Card <n:Integer> => format!("Card {n}") };
-
-pub(crate) Teller: ParsedItem = {
-    Converted<TellerCyCm> => TellerCyCm(<>),
-    Converted<TellerCard> => TellerCard(<>)
+// JAEGER
+pub(crate) JaegerExact: ParsedItem = {
+    JaegerRow => Jaeger(<>.to_uppercase()),
+};
+JaegerRow = {
+    "j1+", "j1", "j2", "j3", "j4", "j5", "j6", "j7", "j8", "j9", "j10", "j11", "j12", "j13", "j14", "j15",
+    "j16", "j17", "j18", "j19", "j20", "j21", "j22", "j23", "j24", "j25", "j26", "j27", "j28", "j29", "j30",
+};
+pub(crate) JaegerConvertible: ParsedItem = {
+    "j0" => Jaeger(format!("J1+")),
 };
 
-NLetters: u32 = { _NLetters => { let (n, ) = extract_integers(<>).unwrap(); n } };
-ETDRSPhrase: String = { <n:NLetters> => format!("{n} letters") };
-
-pub(crate) ETDRS: ParsedItem = {
-    _ETDRS? <c:Converted<ETDRSPhrase>> => ETDRS(c),
+// TELLER
+pub(crate) TellerExact: ParsedItem = {
+    <NumberFloat> "cy" "/" "cm" => Teller(format!("{} cy/cm", <>)),
+    "card" <Integer> => Teller(format!("Card {}", <>))
+};
+pub(crate) ETDRSExact: ParsedItem = {
+    "etdrs"? <n:Integer> Letters => ETDRS(format!("{n} letters")),
+};
+Letters = {
+    "letters",
+    "lttrs",
+    "ltrs"
 };
 
-
-CF: String = { String<_CountingFingers> };
-HM: String = { String<_HandMotion> };
-LP: String = {
-    String<_LightPerception>,
-    String<_SensitiveToLight>,
-    _Sensitive _ToLight => input.to_string(),
+// NEAR-TOTAL LOSS OF VISION
+LowVisionExact: ParsedItem = {
+    "cf" <d:DistanceUnits?> => LowVision(format!("CF"), d.unwrap_or_default()),
+    "hm" <d:DistanceUnits?> => LowVision(format!("HM"), d.unwrap_or_default()),
+    "lp" <d:DistanceUnits?> => LowVision(format!("LP"), d.unwrap_or_default()),
+    "nlp" => LowVision(format!("NLP"), DistanceUnits::NotProvided),
 };
-NLP = {
-    String<_NoLightPerception>,
-    Negation _SensitiveToLight => input.to_string()
-}
-
+LowVisionConvertible: ParsedItem = {
+    Negation BTLConvertible => LowVision(format!("NLP"), DistanceUnits::NotProvided),
+    BTLConvertible => LowVision(format!("LP"), DistanceUnits::NotProvided),
+    Sensitive "to"? "light" => LowVision(format!("LP"), DistanceUnits::NotProvided),
+};
+BTLConvertible = {
+    "btl", "rtl", "wtl", "b" "to" "l" => orig, "r" "to" "l" => orig, "w" "to" "l" => orig,
+};
+Sensitive = {
+    "closing" "eye" => orig, "closing" "eyes" => orig, "closes" "eye" => orig, "closes" "eyes" => orig,
+    "averts", "averse", "adverse", "bat", "bats", "batting", "blink", "blinking", "blinks",
+    "dazzle", "dazzles", "dazzling", "flinch", "flinches", "flinching", "fuss", "fusses", "fussing",
+    "grimace", "grimaces", "grimacing", "look",  "looking", "looks", "objection", "objecting", "objects",
+    "protest", "protests", "protesting", "react", "reaction", "reacting", "reacts",
+    "response", "responds", "responsive", "responding", "rxn", "squint", "squinting", "squints",
+    "wince", "winces", "wincing", "whince", "whinces", "whincing", "whinch", "whinches", "whinching",
+    "withdraw", "withdraws", "withdrawing",
+};
 pub(crate) LowVision: ParsedItem = {
-    <method:Converted<CF>> <distance:DistanceUnits?> => LowVision(method.rewrite("CF"), distance.unwrap_or_default() ),
-    <method:Converted<HM>> <distance:DistanceUnits?> => LowVision(method.rewrite("HM"), distance.unwrap_or_default() ),
-    <method:Converted<LP>> => LowVision(method.rewrite("LP"), DistanceUnits::NotProvided ),
-    <method:Converted<NLP>> => LowVision(method.rewrite("NLP"), DistanceUnits::NotProvided ),
-    _PinHoleNoImprovement => PinHoleEffectItem(PinHoleEffect::NI),
+    "ni" => PinHoleEffectItem(PinHoleEffect::NI),
 };
 
+// BINOCULAR FIXATION
 BinocularFixation: ParsedItem = {
     BinocularFixationPreference => BinocularFixation(<>),
 };
-
 BinocularFixationPreference: FixationPreference = {
-    _FixationPreference => match <>.to_uppercase().replace(['(', ')'], "").as_str() {
-        "CSM" => CSM,
-        "CUSM" => CUSM,
-        "CSUM" => CSUM,
-        "CUSUM" => CUSUM,
-        "UCSM" => UCSM,
-        "UCUSM" => UCUSM,
-        "UCSUM" => UCSUM,
-        "UCUSUM" => UCUSUM,
-        _ => unreachable!("{}", <>)
-    },
-    _FF => FixAndFollow,
-    _FixAndFollow => FixAndFollow,
-    Negation _FixAndFollow => NoFixAndFollow,
-    _FixNoFollow => FixNoFollow,
-    _Prefers => Prefers,
-    _Holds => Holds,
+    "csm" => CSM,
+    "cusm" => CUSM,
+    "csum" => CSUM,
+    "cusum" => CUSUM,
+    "ucsm" => UCSM,
+    "ucusm" => UCUSM,
+    "ucsum" => UCSUM,
+    "ucusum" => UCUSUM,
+    "ff" => FixAndFollow,
+    "f" And? "f" => FixAndFollow,
+    "f" "/" "f" => FixAndFollow,
+    "fix" And? "follow" => FixAndFollow,
+    Negation "fix" And? "follow" => NoFixAndFollow,
+    "fix" "no" "follow" => FixNoFollow,
+    "prefers" => Prefers,
+    "prefer" => Prefers,
+    "pref" => Prefers,
+    "p" => Prefers,
+    "holds" => Holds,
+    "hold" => Holds,
 };
-
+And = { "and", "+", "&" }
 NotTaken: ParsedItem = {
-    _NT => NotTakenItem(NotTakenReason::NT),
-    _Refused => NotTakenItem(NotTakenReason::Refused),
-    _Unable => NotTakenItem(NotTakenReason::Unable),
-    _Sleeping => NotTakenItem(NotTakenReason::Sleeping),
-    _Prosthesis => NotTakenItem(NotTakenReason::Prosthesis),
-    _SeeMR => NotTakenItem(NotTakenReason::SeeMR),
+    "not" "taken" => NotTakenItem(NotTakenReason::NT),
+    "nt" => NotTakenItem(NotTakenReason::NT),
+    "refused" => NotTakenItem(NotTakenReason::Refused),
+    "unable" => NotTakenItem(NotTakenReason::Unable),
+    "sleeping" => NotTakenItem(NotTakenReason::Sleeping),
+    Prosthesis => NotTakenItem(NotTakenReason::Prosthesis),
+    "see" "mr" => NotTakenItem(NotTakenReason::SeeMR),
+};
+Prosthesis = {
+    "pros", "pros.", "prostheses", "prosthesis", "prosthesis.", "prosthestic", "prosthet", "prosthetic", "prosthetic."
 };
 
+// PLUS LETTERS (eg. 20/40+1)
 pub(crate) PlusLetters: ParsedItem = {
-    _PlusLetters => PlusLettersItem(<>.replace(&[' ', '+'], "").parse().unwrap())
+    r#"[-+]\s*[1-6]"# => PlusLettersItem(<>.replace(&[' ', '+'], "").parse().unwrap())
 }
 
+// WORKING DISTANCE
 pub(crate) DistanceUnits: DistanceUnits = {
-    _At? <n:_NInches> =>? Ok(DistanceUnits::Inches(extract_float(n)?)),
-    _At? <n:_NFeet> =>? Ok(DistanceUnits::Feet(extract_float(n)?)),
-    _At? <n:_NCentimeters> =>? Ok(DistanceUnits::Centimeters(extract_float(n)?)),
-    _At? <n:_NMeters> =>? Ok(DistanceUnits::Meters(extract_float(n)?)),
-    _At? <r:_InchRange> =>? Ok(DistanceUnits::InchesRange(extract_floats(r)?)),
-    _At? <r:_FeetRange> =>? Ok(DistanceUnits::FeetRange(extract_floats(r)?)),
-    "to face" => DistanceUnits::Unhandled(input.to_string()),
-    "to wall" => DistanceUnits::Unhandled(input.to_string()),
-    _At? _Face => DistanceUnits::Unhandled(input.to_string()),
-    _At? _Close => DistanceUnits::Unhandled(input.to_string()),
-    _At? OtherToken => DistanceUnits::Unhandled(input.to_string()),  // Discarding the messy for now
+    At? <n:_NInches> =>? Ok(DistanceUnits::Inches(extract_float(n)?)),
+    At? <n:_NFeet> =>? Ok(DistanceUnits::Feet(extract_float(n)?)),
+    At? <n:_NCentimeters> =>? Ok(DistanceUnits::Centimeters(extract_float(n)?)),
+    At? <n:_NMeters> =>? Ok(DistanceUnits::Meters(extract_float(n)?)),
+    At? <r:_InchRange> =>? Ok(DistanceUnits::InchesRange(extract_floats(r)?)),
+    At? <r:_FeetRange> =>? Ok(DistanceUnits::FeetRange(extract_floats(r)?)),
+    At? "face" => DistanceUnits::Unhandled(orig.to_string()),
+    At? "close" => DistanceUnits::Unhandled(orig.to_string()),
+    "to" "face" => DistanceUnits::Unhandled(orig.to_string()),
+    "to" "wall" => DistanceUnits::Unhandled(orig.to_string()),
 };
+At = { "at", "@" };
+Feet = { "feet", "foot", "ft.", "ft", "f.", "f", "'" };
 
+// VISIT INFO
 pub(crate) VisitInfo: ParsedItem = {
     VisitDistance,
     VisitEye,
     VisitCorrection,
     VisitPinHole,
 };
-
 VisitDistance: ParsedItem = {
-    _Near => DistanceItem(Near),
-    _Distance => DistanceItem(Distance),
+    "near" => DistanceItem(Near),
+    "distance" => DistanceItem(Distance),
 };
-
 VisitEye: ParsedItem = {
-    _OS => LateralityItem(OS),
-    _OD => LateralityItem(OD),
-    _OU => LateralityItem(OU),
+    "os" =>  LateralityItem(OS),
+    "od" => LateralityItem(OD),
+    "ou" => LateralityItem(OU),
+    "left" "eye" =>  LateralityItem(OS),
+    "right" "eye" => LateralityItem(OD),
+    "both" "eyes" => LateralityItem(OU),
 };
-
 VisitCorrection: ParsedItem = {
-    _SC => CorrectionItem(SC),
-    _CC => CorrectionItem(CC),
+    "sc" => CorrectionItem(SC),
+    "cc" => CorrectionItem(CC),
 }
-
 VisitPinHole: ParsedItem = {
-    _PinHole => PinHoleItem(crate::PinHole::With),
+    "pin" "hole" => PinHoleItem(PinHole::With),
+    "pinhole" => PinHoleItem(PinHole::With),
+    "ph" => PinHoleItem(PinHole::With),
 }
-
-Negation = { _No, _Not }
 
 //** TOKENIZATION **
 //
@@ -198,26 +224,6 @@ match {
     r#"[ \t\n\f,()]"# => {}, // Discard spaces and non-token symbols
 
     // Other tokens
-    "20",
-    "/",
-    "J",
-    "j",
-    "+",
-    r#"\d+"# => _NumberInteger,
-    r#"\d*\.\d+"# => _NumberFloat,
-    r#"[-+]\s*[1-6]"# => _PlusLetters,
-
-    r#"(?i)card"# => _Card,
-    r#"(?i)cy\s*/\s*cm"# => _CyCm,
-    r#"(?i)U?CU?SU?(\(M\)|M)"# => _FixationPreference,
-    r#"(?i)face"# => _Face,
-    r#"(?i)F\s*(and|\+|/|&)?\s*F"# => _FF,
-    r#"(?i)fix\s*(and|\+|/|&|,)?\s*follow"# => _FixAndFollow,
-    r#"(?i)fix[,\s]*(no)\s*follow"# => _FixNoFollow,
-    r#"(?i)(prefers?|pref|p)"# => _Prefers,
-    r#"(?i)(holds?)"# => _Holds,
-
-    r#"(?i)(@|at)"# => _At,
     r#"(?i)\d+(\.\d+|\s+1/2)?\s*(feet|foot|ft\.?|f\.?|')"# => _NFeet,
     r#"(?i)\d+(\.\d+|\s+1/2)?\s*(inches|inch|in\.?|")"# => _NInches,
     r#"(?i)\d+(\.\d+|\s+1/2)?\s*(meters|m\.?)"# => _NMeters,
@@ -225,62 +231,21 @@ match {
     r#"(?i)\d+(\.\d+|\s+1/2)?\s*(to|-)\s*\d+(\.\d+|\s+1/2)?\s*(feet|foot|ft\.?|f\.?|')"# => _FeetRange,
     r#"(?i)\d+(\.\d+|\s+1/2)?\s*(to|-)\s*\d+(\.\d+|\s+1/2)?\s*(inches|inch|in\.?|")"# => _InchRange,
 
-    r#"(?i)(pin hole|pinhole|PH)"# => _PinHole,
-    r#"(?i)ni"# => _PinHoleNoImprovement,
-    r#"(?i)close"# => _Close,
-    r#"(?i)no"# => _No,
-    r#"(?i)not"# => _Not,
-
-    r#"(?i)ETDRS"# => _ETDRS,
-    r#"(?i)([0-8]?\d|9[0-5])\s*(letters|ltt?rs)"# => _NLetters,  // 0-95 letters
-//    r#"(?i)CF(at|@)?"# => _CountingFingers,
-//    r#"(?i)HM(at|@)?"# => _HandMotion,
-//    r#"(?i)LP(at|@)?"# => _LightPerception,
-//    r#"(?i)NLP(at|@)?"# => _NoLightPerception,
-    r#"(?i)CF"# => _CountingFingers,
-    r#"(?i)HM"# => _HandMotion,
-    r#"(?i)LP"# => _LightPerception,
-    r#"(?i)NLP"# => _NoLightPerception,
-
-    r#"(?i)(OS|Left Eye)"# => _OS,
-    r#"(?i)(OD|Right Eye)"# => _OD,
-    r#"(?i)(OU|Both Eyes)"# => _OU,
-
-    r#"(?i)near"# => _Near,
-    r#"(?i)distance"# => _Distance,
-
-    r#"(?i)(CC)"# => _CC,
-    r#"(?i)(SC)"# => _SC,
-
-    r"(?i)(not taken|NT)" => _NT,
-    r"(?i)unable" => _Unable,
-    r"(?i)refused" => _Refused,
-    r"(?i)see mr" => _SeeMR,
-    r"(?i)sleeping" => _Sleeping,
-    r"(?i)(pros[a-z]*\.?)" => _Prosthesis,
-
-
-    r#"(?i)((to)?\s*light)"# => _ToLight,
-    r#"(?i)([BRW]( to |T)L)"# => _SensitiveToLight,
-
-    r#"(?i)(ad?ver\w+|bat(ting|s)?|blink(ing|s)?|clos(ing|es?) eyes?|dazzl(ing|es?)|flinch(ing|s)?|fuss(ing|es)|grimac(ing|es?)|looks down|object(ion|ing|s)?|protest(ing|s)?|react\w*|reflex(es)?|respon\w+|rxn|squint(ing|s)?|wh?inc(ing|es?)?|winch(ing|es)?|withdraw(ing|s)?)"#
-        => _Sensitive,
-    r#"(?i)more"# => _More,
-    //    averts head
 } else {
-    r#"[,]|\p{Letter}+|\p{Symbol}|\p{Punctuation}"# => OtherToken,
     _ // catch-all
 }
 
-Input<T>: Input<'input, T> = {
-    // Macro to give us handy access to inputs etc.
-    <left:@L> <content:T> <right:@R> => Input{content, left, right, input }
+// Data Quality decorators:
+// Using these constructs, we can annotate the data quality features of `ParsedItem`s right here in the grammar.
+
+DQUnrecognized<T>: Content<'input, T> = {
+    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, dq: DataQuality::Unrecognized, }
 };
 
-Converted<String>: Expression = {
-    <left:@L> <content:String> <right:@R> => Expression::new(&input[left..right]).rewrite(content)
+DQExact<T>: Content<'input, T> = {
+    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, dq: DataQuality::Exact, }
 };
 
-String<T>: String = {
-    T => <>.to_string()
+DQConvertible<T>: Content<'input, T> = {
+    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, dq: DataQuality::Convertible, }
 };

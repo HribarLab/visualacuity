@@ -1,5 +1,6 @@
 extern crate lalrpop_util;
 
+mod types;
 pub(crate) mod errors;
 pub(crate) mod parser;
 pub(crate) mod structure;
@@ -14,6 +15,7 @@ mod charts;
 #[cfg(test)]
 mod tests;
 
+pub use types::*;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 pub use visit::{Visit, VisitNote};
@@ -21,7 +23,7 @@ use visitinput::ColumnMerger;
 use crate::ParsedItem::*;
 use crate::VisualAcuityError::{*};
 use crate::cache::LruCacher;
-use crate::parser::grammar::ChartNotesParser;
+use crate::parser::{Parse, ChartNotesParser};
 pub use crate::errors::{VisualAcuityError, VisualAcuityResult};
 
 pub use structure::*;
@@ -81,7 +83,10 @@ impl Parser {
 
     fn parse_text(&self, notes: &str) -> ParsedItemCollection {
         self.parse_cache.get(&notes.trim().to_string(), || {
-            match self.notes_parser.parse(notes.trim()) {
+            let notes = notes.trim();
+            let binding = notes.to_lowercase();
+            let notes_temp = binding.as_str();
+            match self.notes_parser.parse(notes, notes_temp) {
                 Ok(p) => p,
                 Err(e) => [Unhandled(format!(" {e}"))].into_iter().collect()
             }

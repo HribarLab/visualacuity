@@ -1,6 +1,5 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
-use std::ops::Deref;
 use std::slice::Iter;
 use std::str::FromStr;
 use itertools::{ExactlyOneError, Itertools};
@@ -12,43 +11,11 @@ use crate::ParsedItem::*;
 use crate::VisualAcuityError::*;
 use crate::charts::ChartRow;
 use crate::DistanceUnits::NotProvided;
-use crate::parser::Expression;
 
 lazy_static! {
 static ref PATTERN_FRACTION: Regex = Regex::new(r"^\s*(\d+(?:\.\d*)?)\s*/\s*(\d+(?:\.\d*)?)\s*$").expect("");
 }
 
-pub trait TInput: PartialEq + Debug + Clone {}
-impl<T> TInput for T where T: PartialEq + Debug + Clone {}
-
-
-#[derive(PartialEq, Debug)]
-pub struct Input<'input, T: TInput> {
-    pub content: T,
-    pub left: usize,
-    pub right: usize,
-    pub input: &'input str,
-}
-
-impl<'input, T: TInput> Deref for Input<'input, T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.content
-    }
-}
-
-impl<'input, T: TInput> PartialEq<T> for Input<'input, T> {
-    fn eq(&self, other: &T) -> bool {
-        self.content == *other
-    }
-}
-
-impl<'input, T: TInput> Display for Input<'input, T> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", &self.input[self.left..self.right])
-    }
-}
 
 #[derive(Clone, Copy, PartialEq, Deref, Debug)]
 pub struct Fraction(pub(crate) (f64, f64));
@@ -130,12 +97,11 @@ pub enum NotTakenReason {
 
 #[derive(Hash, Clone, Debug, PartialEq, Eq)]
 pub enum ParsedItem {
-    SnellenFraction(Expression),
-    Jaeger(Expression),
-    TellerCard(Expression),
-    TellerCyCm(Expression),
-    ETDRS(Expression),
-    LowVision(Expression, DistanceUnits),
+    SnellenFraction(String),
+    Jaeger(String),
+    Teller(String),
+    ETDRS(String),
+    LowVision(String, DistanceUnits),
     PinHoleEffectItem(PinHoleEffect),
     BinocularFixation(FixationPreference),
     PlusLettersItem(i32),
@@ -158,8 +124,7 @@ impl Display for ParsedItem {
             SnellenFraction(s)
             | Jaeger(s)
             | ETDRS(s)
-            | TellerCard(s)
-            | TellerCyCm(s) => {
+            | Teller(s) => {
                 s.to_string()
             },
             PlusLettersItem(n) => if *n > 0 { format!("+{self}") } else { format!("{n}") },
@@ -204,8 +169,7 @@ impl ParsedItem {
         match self {
             SnellenFraction(_)
             | ETDRS { .. }
-            | TellerCard(_)
-            | TellerCyCm(_)
+            | Teller(_)
             | Jaeger(_) => {
                 Ok(self.to_string())
             },
@@ -279,8 +243,7 @@ impl ParsedItemCollection {
             SnellenFraction { .. } => Some(Method::Snellen),
             Jaeger { .. } => Some(Method::Jaeger),
             ETDRS { .. } => Some(Method::ETDRS),
-            TellerCard { .. } => Some(Method::Teller),
-            TellerCyCm { .. } => Some(Method::Teller),
+            Teller { .. } => Some(Method::Teller),
             LowVision { .. } => Some(Method::LowVision),
             _ => None
         }).unwrap_or(Method::Unknown)
@@ -416,8 +379,7 @@ impl From<ParsedItem> for Method {
         match value {
             SnellenFraction { .. } => Method::Snellen,
             Jaeger { .. } => Method::Jaeger,
-            TellerCard { .. } => Method::Teller,
-            TellerCyCm { .. } => Method::Teller,
+            Teller { .. } => Method::Teller,
             ETDRS { .. } => Method::ETDRS,
             LowVision { .. } => Method::LowVision,
             PinHoleEffectItem(_) => Method::PinHole,
