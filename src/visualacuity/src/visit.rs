@@ -5,7 +5,7 @@ use crate::{Correction, CorrectionItem, DistanceOfMeasurement, Laterality, Parse
 use crate::logmar::{LogMarBase, LogMarPlusLetters};
 use crate::ParsedItem::*;
 use crate::snellen_equivalent::SnellenEquivalent;
-use crate::structure::{Disambiguate, Fraction, Method, PinHole};
+use crate::structure::{Disambiguate, Fraction, VAFormat, PinHole};
 
 /// The public return type representing a parsed & processed set of EHR notes for a patient visit
 #[derive(IntoIterator, PartialEq, Debug, Clone)]
@@ -25,11 +25,11 @@ pub struct VisitNote {
     pub distance_of_measurement: DistanceOfMeasurement,
     /// Whether correction was used (typically retrieved from the field name)
     pub correction: Correction,
-    /// Whether the observation involved pin-hole methods (typically retrieved from field name)
+    /// Whether the observation involved a pin-hole test (typically retrieved from field name)
     pub pinhole: PinHole,
 
-    /// The method used during observation
-    pub method: Method,
+    /// The detected format, e.g. Snellen or Teller
+    pub va_format: VAFormat,
     ///  When a patient reads a partial line, how many letters were indicated in the note  (+/-)
     pub plus_letters: Vec<i32>,
 
@@ -57,7 +57,7 @@ impl VisitNote {
         let base_acuity = base_acuity(&sifted.acuities, &sifted.other_observations);
         let log_mar_base = map_ok_some(&base_acuity, |v| v.log_mar_base());
         let log_mar_base_plus_letters = map_ok_some(&base_acuity, |v| v.log_mar_plus_letters(&sifted.plus_letters));
-        let method = get_method(&base_acuity, &sifted.acuities);
+        let va_format = get_va_format(&base_acuity, &sifted.acuities);
         let extracted_value = extract_value(&base_acuity);
         let distance_of_measurement = DistanceOfMeasurement::disambiguate(&sifted.distances);
         let correction = Correction::disambiguate(&sifted.corrections);
@@ -68,7 +68,8 @@ impl VisitNote {
 
         Ok(VisitNote {
             text, text_plus, extracted_value, distance_of_measurement, correction, pinhole,
-            laterality, plus_letters, method, snellen_equivalent, log_mar_base, log_mar_base_plus_letters
+            laterality, plus_letters,
+            va_format, snellen_equivalent, log_mar_base, log_mar_base_plus_letters
         })
     }
 }
@@ -110,11 +111,11 @@ fn extract_value(item: &VisualAcuityResult<Option<ParsedItem>>) -> String {
     item.to_string()
 }
 
-/// Determine the method used for the base observation.
-fn get_method(base_acuity: &VisualAcuityResult<Option<ParsedItem>>, other_acuities: &Vec<ParsedItem>) -> Method {
+/// Determine the format/method of the VA text.
+fn get_va_format(base_acuity: &VisualAcuityResult<Option<ParsedItem>>, other_acuities: &Vec<ParsedItem>) -> VAFormat {
     match base_acuity {
         Ok(Some(ref value)) => value.clone().into(),
-        _ => Method::disambiguate(&other_acuities.iter().cloned().map_into())
+        _ => VAFormat::disambiguate(&other_acuities.iter().cloned().map_into())
     }
 }
 

@@ -30,7 +30,7 @@ class Correction(_ConciseEnumRepr, Enum):
     SC = "SC"
 
 
-class Method(_ConciseEnumRepr, Enum):
+class VAFormat(_ConciseEnumRepr, Enum):
     ERROR = "Error"
     UNKNOWN = "Unknown"
     SNELLEN = "Snellen"
@@ -58,7 +58,7 @@ class VisitNote:
     distance_of_measurement: DistanceOfMeasurement = DistanceOfMeasurement.UNKNOWN
     correction: Correction = Correction.UNKNOWN
     pinhole: PinHole = PinHole.UNKNOWN
-    method: Method = Method.UNKNOWN
+    va_format: VAFormat = VAFormat.UNKNOWN
     plus_letters: List[int] = field(default_factory=list)
     extracted_value: str = ""
     snellen_equivalent: Optional[Tuple[Number, Number]] = None
@@ -67,7 +67,7 @@ class VisitNote:
 
     def raise_errors(self):
         errors = [
-            attr for attr in (self.laterality, self.distance_of_measurement, self.correction, self.method, self.pinhole)
+            attr for attr in (self.laterality, self.distance_of_measurement, self.correction, self.va_format, self.pinhole)
             if attr.name == "ERROR"
         ]
         if any(errors):
@@ -92,4 +92,4 @@ class Visit(Dict[str, VisitNote]):
         return value if isinstance(value, float) else float("nan")
 
 
-ERRORS = {Laterality.ERROR, DistanceOfMeasurement.ERROR, Correction.ERROR, Method.ERROR, PinHole.ERROR}
+ERRORS = {Laterality.ERROR, DistanceOfMeasurement.ERROR, Correction.ERROR, VAFormat.ERROR, PinHole.ERROR}

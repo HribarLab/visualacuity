@@ -358,7 +358,7 @@ fn test_log_mar_base(
             distance_of_measurement: DistanceOfMeasurement::Distance,
             correction: Correction::CC,
             pinhole: PinHole::Unknown,
-            method: Method::Snellen,
+            va_format: VAFormat::Snellen,
             extracted_value: format ! ("20/20"),
             plus_letters: vec ! [- 2],
             snellen_equivalent: Ok(Some((20, 20).into())),
@@ -379,7 +379,7 @@ fn test_log_mar_base(
             distance_of_measurement: DistanceOfMeasurement::Distance,
             correction: Correction::Error(MultipleValues(format ! ("[CC, SC]"))),
             pinhole: PinHole::Unknown,
-            method: Method::Snellen,
+            va_format: VAFormat::Snellen,
             extracted_value: format ! ("20/100"),
             plus_letters: vec ! [- 1, 2],
             snellen_equivalent: Ok(Some((20, 100).into())),
@@ -387,7 +387,7 @@ fn test_log_mar_base(
             log_mar_base_plus_letters: Ok(Some(0.6828)),
         })
     ])
-    ; "Handling ambiguous Methods"
+    ; "Handling ambiguous VAFormats"
 )]
 #[test_case(
     [
@@ -401,7 +401,7 @@ fn test_log_mar_base(
             distance_of_measurement: DistanceOfMeasurement::Distance,
             correction: Correction::CC,
             pinhole: PinHole::Unknown,
-            method: Method::Error(MultipleValues(format ! ("[Snellen, Jaeger]"))),
+            va_format: VAFormat::Error(MultipleValues(format ! ("[Snellen, Jaeger]"))),
             extracted_value: format ! ("Error"),
             plus_letters: vec ! [],
             snellen_equivalent: Err(MultipleValues(format!("[20/20, J5]"))),
@@ -501,21 +501,21 @@ fn test_visit_snellen_equivalents(
 
 #[test_case(
     vec ! [("", "20/20 ETDRS 83 letters")],
-    Ok(HashMap::from([("", Method::ETDRS)]))
+    Ok(HashMap::from([("", VAFormat::ETDRS)]))
 )]
 #[test_case(
     vec ! [("", "CF at 8 feet to 20/400")],
-    Ok(HashMap::from([("", Method::Error(MultipleValues(format ! ("[LowVision, Snellen]"))))]))
+    Ok(HashMap::from([("", VAFormat::Error(MultipleValues(format ! ("[LowVision, Snellen]"))))]))
 )]
-fn test_method(
+fn test_va_format(
     visit_notes: Vec<(&str, &str)>,
-    expected: VisualAcuityResult<HashMap<&str, Method>>
+    expected: VisualAcuityResult<HashMap<&str, VAFormat>>
 ) {
     let parser = Parser::new();
     let actual = parser.parse_visit(visit_notes.into())
         .map(|visit| {
             visit.into_iter()
-                .map(|(key, note)| (key, note.method))
+                .map(|(key, note)| (key, note.va_format))
                 .collect()
         });
     let expected = expected.map(|exp| exp.into_iter()

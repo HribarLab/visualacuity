@@ -5,7 +5,7 @@ from visualacuity._types import (
     Laterality,
     DistanceOfMeasurement,
     Correction,
-    Method,
+    VAFormat,
     PinHole,
 )
 from visualacuity._parse import (
@@ -24,8 +24,8 @@ DISTANCE = DistanceOfMeasurement.DISTANCE
 CC = Correction.CC
 SC = Correction.SC
 
-SNELLEN = Method.SNELLEN
-JAEGER = Method.JAEGER
-ETDRS = Method.ETDRS
-TELLER = Method.TELLER
-LOW_VISION = Method.LOW_VISION
+SNELLEN = VAFormat.SNELLEN
+JAEGER = VAFormat.JAEGER
+ETDRS = VAFormat.ETDRS
+TELLER = VAFormat.TELLER
+LOW_VISION = VAFormat.LOW_VISION

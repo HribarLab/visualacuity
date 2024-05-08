@@ -238,15 +238,15 @@ impl ParsedItemCollection {
         self.get_one(match_base_item)
     }
 
-    pub fn method(&self) -> Method {
+    pub fn va_format(&self) -> VAFormat {
         self.get_one(|item| match item {
-            SnellenFraction { .. } => Some(Method::Snellen),
-            Jaeger { .. } => Some(Method::Jaeger),
-            ETDRS { .. } => Some(Method::ETDRS),
-            Teller { .. } => Some(Method::Teller),
-            LowVision { .. } => Some(Method::LowVision),
+            SnellenFraction { .. } => Some(VAFormat::Snellen),
+            Jaeger { .. } => Some(VAFormat::Jaeger),
+            ETDRS { .. } => Some(VAFormat::ETDRS),
+            Teller { .. } => Some(VAFormat::Teller),
+            LowVision { .. } => Some(VAFormat::LowVision),
             _ => None
-        }).unwrap_or(Method::Unknown)
+        }).unwrap_or(VAFormat::Unknown)
     }
 }
 
@@ -316,7 +316,7 @@ impl Disambiguate for Correction {
     }
 }
 
-impl Disambiguate for Method {
+impl Disambiguate for VAFormat {
     fn on_conflict<I: Iterator<Item=Self>>(e: ExactlyOneError<I>) -> Self {
         Self::Error(e.into())
     }
@@ -360,7 +360,7 @@ impl Display for PinHole {
 }
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Method {
+pub enum VAFormat {
     Error(VisualAcuityError),
     #[default]
     Unknown,
@@ -374,23 +374,23 @@ pub enum Method {
     NotTaken,
 }
 
-impl From<ParsedItem> for Method {
+impl From<ParsedItem> for VAFormat {
     fn from(value: ParsedItem) -> Self {
         match value {
-            SnellenFraction { .. } => Method::Snellen,
-            Jaeger { .. } => Method::Jaeger,
-            Teller { .. } => Method::Teller,
-            ETDRS { .. } => Method::ETDRS,
-            LowVision { .. } => Method::LowVision,
-            PinHoleEffectItem(_) => Method::PinHole,
-            BinocularFixation(_) => Method::Binocular,
-            NotTakenItem(_) => Method::NotTaken,
-            _ => Method::Unknown,
+            SnellenFraction { .. } => VAFormat::Snellen,
+            Jaeger { .. } => VAFormat::Jaeger,
+            Teller { .. } => VAFormat::Teller,
+            ETDRS { .. } => VAFormat::ETDRS,
+            LowVision { .. } => VAFormat::LowVision,
+            PinHoleEffectItem(_) => VAFormat::PinHole,
+            BinocularFixation(_) => VAFormat::Binocular,
+            NotTakenItem(_) => VAFormat::NotTaken,
+            _ => VAFormat::Unknown,
         }
     }
 }
 
-impl Display for Method {
+impl Display for VAFormat {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{self:?}")
     }

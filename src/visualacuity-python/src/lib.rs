@@ -19,7 +19,7 @@ fn visualacuity_python(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Laterality>()?;
     m.add_class::<DistanceOfMeasurement>()?;
     m.add_class::<Correction>()?;
-    m.add_class::<Method>()?;
+    m.add_class::<VAFormat>()?;
     m.add_class::<PinHole>()?;
     Ok(())
 }

@@ -22,7 +22,7 @@ pub struct VisitNote {
     pub correction: Correction,
 
     #[pyo3(get)]
-    pub method: Method,
+    pub va_format: VAFormat,
 
     #[pyo3(get)]
     pub plus_letters: Vec<i32>,
@@ -68,7 +68,7 @@ impl From<visualacuity::VisitNote> for VisitNote {
             distance_of_measurement: value.distance_of_measurement.into(),
             correction: value.correction.into(),
             pinhole: value.pinhole.into(),
-            method: value.method.into(),
+            va_format: value.va_format.into(),
             extracted_value: value.extracted_value,
             snellen_equivalent: value.snellen_equivalent.map(|se| se.map(Into::into)),
             log_mar_base: value.log_mar_base,
@@ -165,7 +165,7 @@ impl From<visualacuity::Correction> for Correction {
 
 #[pyclass(module="visualacuity")]
 #[derive(Hash, Clone, PartialEq, Debug)]
-pub enum Method {
+pub enum VAFormat {
     ERROR = 0,
     UNKNOWN = 1,
     SNELLEN = 2,
@@ -179,15 +179,15 @@ pub enum Method {
 }
 
 #[pymethods]
-impl Method {
+impl VAFormat {
     fn __hash__(&self) -> u64 {
         py_hash(self)
     }
 }
 
-impl From<visualacuity::Method> for Method {
-    fn from(value: visualacuity::Method) -> Self {
-        use visualacuity::Method::*;
+impl From<visualacuity::VAFormat> for VAFormat {
+    fn from(value: visualacuity::VAFormat) -> Self {
+        use visualacuity::VAFormat::*;
         match value {
             Error(_) => Self::ERROR,
             Unknown => Self::UNKNOWN,
