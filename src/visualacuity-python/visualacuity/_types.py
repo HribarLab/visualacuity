@@ -37,7 +37,7 @@ class VAFormat(_ConciseEnumRepr, Enum):
     JAEGER = "Jaeger"
     ETDRS = "ETDRS"
     TELLER = "Teller"
-    LOW_VISION = "LowVision"
+    NEAR_TOTAL_LOSS = "NearTotalLoss"
     PIN_HOLE = "PinHole"
     BINOCULAR = "Binocular"
     NOT_TAKEN = "NotTaken"

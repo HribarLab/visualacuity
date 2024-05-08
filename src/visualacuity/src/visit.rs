@@ -144,7 +144,7 @@ impl SiftedParsedItems {
                 Jaeger { .. } => result.acuities.push(item),
                 Teller { .. } => result.acuities.push(item),
                 ETDRS { .. } => result.acuities.push(item),
-                LowVision { .. } => result.acuities.push(item),
+                NearTotalLoss { .. } => result.acuities.push(item),
                 PinHoleEffectItem { .. } => result.other_observations.push(item),
                 BinocularFixation(_) => result.other_observations.push(item),
                 NotTakenItem(_) => result.other_observations.push(item),

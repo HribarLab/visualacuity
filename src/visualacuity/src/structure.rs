@@ -101,7 +101,7 @@ pub enum ParsedItem {
     Jaeger(String),
     Teller(String),
     ETDRS(String),
-    LowVision(String, DistanceUnits),
+    NearTotalLoss(String, DistanceUnits),
     PinHoleEffectItem(PinHoleEffect),
     BinocularFixation(FixationPreference),
     PlusLettersItem(i32),
@@ -129,7 +129,7 @@ impl Display for ParsedItem {
             },
             PlusLettersItem(n) => if *n > 0 { format!("+{self}") } else { format!("{n}") },
             PinHoleItem(effect) => format!("{effect:?}"),
-            LowVision(method, distance) => match distance.to_feet() {
+            NearTotalLoss(method, distance) => match distance.to_feet() {
                 Ok(feet) => format!("{method} @ {feet:?} feet"),
                 _ => format!("{method}")
             },
@@ -152,7 +152,7 @@ impl ParsedItem {
                 | &Jaeger { .. }
                 // | &TellerCard { .. }
                 | &ETDRS { .. }
-                | &LowVision { .. } => true,
+                | &NearTotalLoss { .. } => true,
             _ => false,
         }
     }
@@ -173,7 +173,7 @@ impl ParsedItem {
             | Jaeger(_) => {
                 Ok(self.to_string())
             },
-            LowVision(s,  ..) => {
+            NearTotalLoss(s, ..) => {
                 Ok(s.to_string())
             },
             _ => Err(NoSnellenEquivalent(self.to_string()))
@@ -182,7 +182,7 @@ impl ParsedItem {
 
     pub(crate) fn measurement_distance(&self) -> &DistanceUnits {
         match self {
-            LowVision(_, distance) => distance,
+            NearTotalLoss(_, distance) => distance,
             _ => &NotProvided
         }
 
@@ -244,7 +244,7 @@ impl ParsedItemCollection {
             Jaeger { .. } => Some(VAFormat::Jaeger),
             ETDRS { .. } => Some(VAFormat::ETDRS),
             Teller { .. } => Some(VAFormat::Teller),
-            LowVision { .. } => Some(VAFormat::LowVision),
+            NearTotalLoss { .. } => Some(VAFormat::NearTotalLoss),
             _ => None
         }).unwrap_or(VAFormat::Unknown)
     }
@@ -368,7 +368,7 @@ pub enum VAFormat {
     Jaeger,
     ETDRS,
     Teller,
-    LowVision,
+    NearTotalLoss,
     PinHole,
     Binocular,
     NotTaken,
@@ -381,7 +381,7 @@ impl From<ParsedItem> for VAFormat {
             Jaeger { .. } => VAFormat::Jaeger,
             Teller { .. } => VAFormat::Teller,
             ETDRS { .. } => VAFormat::ETDRS,
-            LowVision { .. } => VAFormat::LowVision,
+            NearTotalLoss { .. } => VAFormat::NearTotalLoss,
             PinHoleEffectItem(_) => VAFormat::PinHole,
             BinocularFixation(_) => VAFormat::Binocular,
             NotTakenItem(_) => VAFormat::NotTaken,

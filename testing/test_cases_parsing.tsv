@@ -20,14 +20,14 @@ J4 +2		Jaeger	J4	+2
 81ltrs		ETDRS	81 letters		
 20/20 ETDRS (83 letters)		ETDRS	83 letters		
 20/20 ETDRS 83 letters		ETDRS	83 letters		
-CF		LowVision	CF		
-HM		LowVision	HM		
-NLP		LowVision	NLP		
-LP		LowVision	LP		
-BTL		LowVision	LP		
-blink to light		LowVision	LP		
+CF		NearTotalLoss	CF		
+HM		NearTotalLoss	HM		
+NLP		NearTotalLoss	NLP		
+LP		NearTotalLoss	LP		
+BTL		NearTotalLoss	LP		
+blink to light		NearTotalLoss	LP		
 NI		PinHole	NI		
-CF at 1.5ft		LowVision	CF @ 1.5 feet		
+CF at 1.5ft		NearTotalLoss	CF @ 1.5 feet		
 # CF 2		Unknown			
 # CF@3		Unknown			
 CSM		Binocular	CSM		

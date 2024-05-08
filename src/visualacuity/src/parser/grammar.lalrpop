@@ -47,15 +47,15 @@ pub ChartNotes: ParsedItemCollection = {
 
 // Each type of `ParsedItem`, decorated with data quality annotations
 pub(crate) VA: Content<'input, ParsedItem> = {
-    DQExact<LowVisionExact>,
+    DQExact<NearTotalLossExact>,
     DQExact<SnellenExact>,
     DQExact<JaegerExact>,
     DQExact<ETDRSExact>,
-    DQConvertible<LowVisionConvertible>,
+    DQConvertible<NearTotalLossConvertible>,
     DQConvertible<JaegerConvertible>,
     DQUnrecognized<TellerExact>,
     DQUnrecognized<PlusLetters>,
-    DQUnrecognized<LowVision>,
+    DQUnrecognized<NearTotalLoss>,
     DQUnrecognized<BinocularFixation>,
     DQUnrecognized<NotTaken>,
     DQUnrecognized<VisitInfo>,
@@ -96,16 +96,16 @@ Letters = {
 };
 
 // NEAR-TOTAL LOSS OF VISION
-LowVisionExact: ParsedItem = {
-    "cf" <d:DistanceUnits?> => LowVision(format!("CF"), d.unwrap_or_default()),
-    "hm" <d:DistanceUnits?> => LowVision(format!("HM"), d.unwrap_or_default()),
-    "lp" <d:DistanceUnits?> => LowVision(format!("LP"), d.unwrap_or_default()),
-    "nlp" => LowVision(format!("NLP"), DistanceUnits::NotProvided),
+NearTotalLossExact: ParsedItem = {
+    "cf" <d:DistanceUnits?> => NearTotalLoss(format!("CF"), d.unwrap_or_default()),
+    "hm" <d:DistanceUnits?> => NearTotalLoss(format!("HM"), d.unwrap_or_default()),
+    "lp" <d:DistanceUnits?> => NearTotalLoss(format!("LP"), d.unwrap_or_default()),
+    "nlp" => NearTotalLoss(format!("NLP"), DistanceUnits::NotProvided),
 };
-LowVisionConvertible: ParsedItem = {
-    Negation BTLConvertible => LowVision(format!("NLP"), DistanceUnits::NotProvided),
-    BTLConvertible => LowVision(format!("LP"), DistanceUnits::NotProvided),
-    Sensitive "to"? "light" => LowVision(format!("LP"), DistanceUnits::NotProvided),
+NearTotalLossConvertible: ParsedItem = {
+    Negation BTLConvertible => NearTotalLoss(format!("NLP"), DistanceUnits::NotProvided),
+    BTLConvertible => NearTotalLoss(format!("LP"), DistanceUnits::NotProvided),
+    Sensitive "to"? "light" => NearTotalLoss(format!("LP"), DistanceUnits::NotProvided),
 };
 BTLConvertible = {
     "btl", "rtl", "wtl", "b" "to" "l" => orig, "r" "to" "l" => orig, "w" "to" "l" => orig,
@@ -120,7 +120,7 @@ Sensitive = {
     "wince", "winces", "wincing", "whince", "whinces", "whincing", "whinch", "whinches", "whinching",
     "withdraw", "withdraws", "withdrawing",
 };
-pub(crate) LowVision: ParsedItem = {
+pub(crate) NearTotalLoss: ParsedItem = {
     "ni" => PinHoleEffectItem(PinHoleEffect::NI),
 };
 

@@ -58,19 +58,19 @@ fn test_teller() {
 
 #[test_case(
     "CF @ 30cm",
-    Ok(vec![LowVision(s!("CF"), Centimeters(30.0) )]),
+    Ok(vec![NearTotalLoss(s!("CF"), Centimeters(30.0) )]),
     Ok((20, 1500).into()),
     Ok(1.85387196)
 )]
 #[test_case(
     "CF @ 3ft",
-    Ok(vec![LowVision(s!("CF"), Feet(3.0) )]),
+    Ok(vec![NearTotalLoss(s!("CF"), Feet(3.0) )]),
     Ok((20, 492).into()),
     Ok(1.36985702)
 )]
 #[test_case(
     "CF @ 8ft",
-    Ok(vec![LowVision(s!("CF"), Feet(8.0) )]),
+    Ok(vec![NearTotalLoss(s!("CF"), Feet(8.0) )]),
     Ok((20, 184).into()),
     Ok(0.94388828)
 )]
@@ -139,23 +139,23 @@ fn test_jaeger(chart_note: &str, expected: VisualAcuityResult<Vec<ParsedItem>>) 
     assert_eq!(actual, expected, "{chart_note}");
 }
 
-    #[test_case("CF", Ok(vec![LowVision(s!("CF"), NotProvided )]))]
-#[test_case("HM", Ok(vec![LowVision(s!("HM"), NotProvided )]))]
-#[test_case("LP", Ok(vec![LowVision(s!("LP"), NotProvided )]))]
-#[test_case("NLP", Ok(vec![LowVision(s!("NLP"), NotProvided )]))]
-#[test_case("BTL", Ok(vec![LowVision(s!("LP"), NotProvided )]))]
-#[test_case("blink to light", Ok(vec![LowVision(s!("LP"), NotProvided )]))]
+    #[test_case("CF", Ok(vec![NearTotalLoss(s!("CF"), NotProvided )]))]
+#[test_case("HM", Ok(vec![NearTotalLoss(s!("HM"), NotProvided )]))]
+#[test_case("LP", Ok(vec![NearTotalLoss(s!("LP"), NotProvided )]))]
+#[test_case("NLP", Ok(vec![NearTotalLoss(s!("NLP"), NotProvided )]))]
+#[test_case("BTL", Ok(vec![NearTotalLoss(s!("LP"), NotProvided )]))]
+#[test_case("blink to light", Ok(vec![NearTotalLoss(s!("LP"), NotProvided )]))]
 #[test_case("NI", Ok(vec ! [PinHoleEffectItem(PinHoleEffect::NI)]))]
-#[test_case("CF at 1.5ft", Ok(vec![LowVision(s!("CF"), Feet(1.5) )]))]
-#[test_case("CF 2'", Ok(vec![LowVision(s!("CF"), Feet(2.0) )]))]
-#[test_case("CF@3'", Ok(vec![LowVision(s!("CF"), Feet(3.0) )]))]
-#[test_case("CF at 3'", Ok(vec![LowVision(s!("CF"), Feet(3.0) )]))]
-#[test_case("CF @ 3 feet", Ok(vec![LowVision(s!("CF"), Feet(3.0) )]))]
-#[test_case("CF @ face", Ok(vec![LowVision(s!("CF"), DistanceUnits::Unhandled("CF @ face".to_string()) )]))]
-#[test_case("CF @ 2M", Ok(vec![LowVision(s!("CF"), Meters(2.0) )]))]
-#[test_case("CF @ 0.3 meters", Ok(vec![LowVision(s!("CF"), Meters(0.3) )]))]
-#[test_case("CF @ 30 cm", Ok(vec![LowVision(s!("CF"), Centimeters(30.0) )]))]
-#[test_case("No BTL", Ok(vec![LowVision(s!("NLP"), NotProvided )]))]
+#[test_case("CF at 1.5ft", Ok(vec![NearTotalLoss(s!("CF"), Feet(1.5) )]))]
+#[test_case("CF 2'", Ok(vec![NearTotalLoss(s!("CF"), Feet(2.0) )]))]
+#[test_case("CF@3'", Ok(vec![NearTotalLoss(s!("CF"), Feet(3.0) )]))]
+#[test_case("CF at 3'", Ok(vec![NearTotalLoss(s!("CF"), Feet(3.0) )]))]
+#[test_case("CF @ 3 feet", Ok(vec![NearTotalLoss(s!("CF"), Feet(3.0) )]))]
+#[test_case("CF @ face", Ok(vec![NearTotalLoss(s!("CF"), DistanceUnits::Unhandled("CF @ face".to_string()) )]))]
+#[test_case("CF @ 2M", Ok(vec![NearTotalLoss(s!("CF"), Meters(2.0) )]))]
+#[test_case("CF @ 0.3 meters", Ok(vec![NearTotalLoss(s!("CF"), Meters(0.3) )]))]
+#[test_case("CF @ 30 cm", Ok(vec![NearTotalLoss(s!("CF"), Centimeters(30.0) )]))]
+#[test_case("No BTL", Ok(vec![NearTotalLoss(s!("NLP"), NotProvided )]))]
 #[test_case("CSM", Ok(vec ! [BinocularFixation(CSM)]))]
 fn test_alternative_visual_acuity(chart_note: &str, expected: Result<Vec<ParsedItem>, ()>) {
     let expected = expected.map(|e| e.into_iter().collect());
@@ -505,7 +505,7 @@ fn test_visit_snellen_equivalents(
 )]
 #[test_case(
     vec ! [("", "CF at 8 feet to 20/400")],
-    Ok(HashMap::from([("", VAFormat::Error(MultipleValues(format ! ("[LowVision, Snellen]"))))]))
+    Ok(HashMap::from([("", VAFormat::Error(MultipleValues(format ! ("[NearTotalLoss, Snellen]"))))]))
 )]
 fn test_va_format(
     visit_notes: Vec<(&str, &str)>,

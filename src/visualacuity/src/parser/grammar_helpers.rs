@@ -39,7 +39,7 @@ fn validate<'a>(input: Content<'a, ParsedItem>) -> Content<'a, ParsedItem> {
         | Jaeger(s)
         | Teller(s)
         | ETDRS(s)
-        | LowVision(s, _)
+        | NearTotalLoss(s, _)
             => match ChartRow::find(s) {
                 None => input.map(|_| Text(input.input_string())),
                 Some(_) => input
