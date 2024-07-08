@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Dict
 
-from visualacuity import Laterality, DistanceOfMeasurement, Correction, VAFormat, PinHole
+from visualacuity import Laterality, DistanceOfMeasurement, Correction, VAFormat, PinHole, DataQuality
 from . import _lib, Visit, VisitNote
 
 PARSER = _lib.Parser()
@@ -13,6 +13,7 @@ def parse_visit(notes: Dict[str, str]) -> Visit:
             key: VisitNote(
                 text=val.text,
                 text_plus=val.text_plus,
+                data_quality=_convert_enum(val.data_quality),
                 laterality=_convert_enum(val.laterality),
                 distance_of_measurement=_convert_enum(val.distance_of_measurement),
                 correction=_convert_enum(val.correction),
@@ -36,7 +37,10 @@ def _convert_enum(enum):
     return _CONVERTIBLE_ENUMS[type_name][value]
 
 
-_CONVERTIBLE_ENUMS = {enum.__name__: enum for enum in (Laterality, DistanceOfMeasurement, Correction, PinHole, VAFormat)}
+_CONVERTIBLE_ENUMS = {
+    enum.__name__: enum
+    for enum in (DataQuality, Laterality, DistanceOfMeasurement, Correction, PinHole, VAFormat)
+}
 
 
 def _try_get_attr(obj, attr, cast=None):
@@ -45,4 +49,3 @@ def _try_get_attr(obj, attr, cast=None):
         return cast(value) if cast else value
     except Exception as e:
         return f"Error"
-

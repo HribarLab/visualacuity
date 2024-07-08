@@ -3,8 +3,8 @@ import os
 import unittest
 from typing import Dict, List
 
+from visualacuity import parse_visit, VisitNote, VAFormat, DataQuality
 from .helpers import close_enough_visit
-from visualacuity import parse_visit, VisitNote, VAFormat
 
 
 class TestVAInterface(unittest.TestCase):
@@ -44,6 +44,7 @@ class TestVAInterface(unittest.TestCase):
                 expected, actual = (
                     {
                         # relevant values to compare
+                        "Data Quality": v.data_quality,
                         "Format": v.va_format,
                         "Extracted Value": v.extracted_value,
                         "Plus Letters": v.plus_letters,
@@ -71,8 +72,9 @@ def _load_file(filename) -> List[Dict[str, str]]:
                 "EHR Entry": VisitNote(
                     text=row["EHR Entry"],
                     text_plus=row["EHR Entry Plus"],
-                    plus_letters=row.get("Plus Letters", []),
-                    extracted_value=row.get("Extracted Value", ""),
+                    data_quality=DataQuality[row.get("Data Quality", "UNRECOGNIZED").upper()],
+                    plus_letters=row.get("Plus Letters", []) or [],
+                    extracted_value=row.get("Extracted Value", "") or "",
                     va_format=VAFormat(row.get("Format", "Unknown")),
                     snellen_equivalent=row.get("Snellen Equivalent", ""),
                     log_mar_base=row.get("LogMAR Equivalent", ""),

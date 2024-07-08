@@ -13,3 +13,4 @@ mod decorator;
 mod wrapper;
 
 pub(crate) use wrapper::*;
+pub(crate) use decorator::Content;

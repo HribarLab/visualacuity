@@ -1,4 +1,4 @@
-pub use chart::{Chart, ChartRow};
+pub use chart::ChartRow;
 
 mod chart;
 
@@ -7,6 +7,7 @@ mod chart;
 mod tests {
     use crate::VisualAcuityResult;
     use super::*;
+    use chart::Chart;
 
     #[test]
     fn test_load() -> VisualAcuityResult<()>{

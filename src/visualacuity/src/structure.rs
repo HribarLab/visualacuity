@@ -2,15 +2,18 @@ use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::slice::Iter;
 use std::str::FromStr;
-use itertools::{ExactlyOneError, Itertools};
+
 use derive_more::{Deref, IntoIterator};
+use itertools::{ExactlyOneError, Itertools};
 use lazy_static::lazy_static;
 use regex::Regex;
+
 use crate::{DistanceUnits, VisualAcuityError, VisualAcuityResult};
-use crate::ParsedItem::*;
-use crate::VisualAcuityError::*;
 use crate::charts::ChartRow;
 use crate::DistanceUnits::NotProvided;
+use crate::helpers::RoundPlaces;
+use crate::ParsedItem::*;
+use crate::VisualAcuityError::*;
 
 lazy_static! {
 static ref PATTERN_FRACTION: Regex = Regex::new(r"^\s*(\d+(?:\.\d*)?)\s*/\s*(\d+(?:\.\d*)?)\s*$").expect("");
@@ -130,7 +133,7 @@ impl Display for ParsedItem {
             PlusLettersItem(n) => if *n > 0 { format!("+{self}") } else { format!("{n}") },
             PinHoleItem(effect) => format!("{effect:?}"),
             NearTotalLoss(method, distance) => match distance.to_feet() {
-                Ok(feet) => format!("{method} @ {feet:?} feet"),
+                Ok(feet) => format!("{method} @ {} feet", feet.round_places(2)),
                 _ => format!("{method}")
             },
             PinHoleEffectItem(effect) => format!("{effect:?}"),
@@ -185,12 +188,11 @@ impl ParsedItem {
             NearTotalLoss(_, distance) => distance,
             _ => &NotProvided
         }
-
     }
 }
 
 #[derive(IntoIterator, PartialEq, Clone, Debug, Default)]
-pub struct ParsedItemCollection(Vec<ParsedItem>);
+pub struct ParsedItemCollection(pub(crate) Vec<ParsedItem>);
 
 impl ParsedItemCollection {
 

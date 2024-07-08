@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+
 use crate::{Visit, VisitNote};
 
 pub(crate) trait RoundPlaces {
@@ -50,4 +51,3 @@ impl RoundPlaces for Visit {
         Self(self.0.round_places(p))
     }
 }
-

@@ -41,24 +41,24 @@ OtherToken = { r#"\p{Letter}+"#, r#"\p{Symbol}"#, r#"\p{Punctuation}"# };
 
 
 // Top-level chart notes. Uses a helper function to merge consecutive "Text()" elements
-pub ChartNotes: ParsedItemCollection = {
+pub ChartNotes: Content<'input, ParsedItemCollection> = {
     VA+ => merge_consecutive_texts(<>)
 };
 
 // Each type of `ParsedItem`, decorated with data quality annotations
 pub(crate) VA: Content<'input, ParsedItem> = {
-    DQExact<NearTotalLossExact>,
     DQExact<SnellenExact>,
     DQExact<JaegerExact>,
-    DQExact<ETDRSExact>,
-    DQConvertible<NearTotalLossConvertible>,
     DQConvertible<JaegerConvertible>,
-    DQUnrecognized<TellerExact>,
-    DQUnrecognized<PlusLetters>,
-    DQUnrecognized<NearTotalLoss>,
-    DQUnrecognized<BinocularFixation>,
+    DQExact<ETDRSExact>,
+    DQExact<TellerExact>,
+    DQExact<PlusLetters>,
+    DQExact<PinHoleNI>,
+    DQExact<NearTotalLossExact>,
+    DQConvertible<NearTotalLossConvertible>,
+    DQExact<BinocularFixation>,
     DQUnrecognized<NotTaken>,
-    DQUnrecognized<VisitInfo>,
+    DQExact<VisitInfo>,
     DQUnrecognized<OtherToken> => <>.map(|t| Text(t.to_string())),
     DQUnrecognized<!> => handle_error(<>)
 };
@@ -120,7 +120,7 @@ Sensitive = {
     "wince", "winces", "wincing", "whince", "whinces", "whincing", "whinch", "whinches", "whinching",
     "withdraw", "withdraws", "withdrawing",
 };
-pub(crate) NearTotalLoss: ParsedItem = {
+pub(crate) PinHoleNI: ParsedItem = {
     "ni" => PinHoleEffectItem(PinHoleEffect::NI),
 };
 

@@ -13,6 +13,9 @@ pub struct VisitNote {
     pub text_plus: String,
 
     #[pyo3(get)]
+    pub data_quality: DataQuality,
+
+    #[pyo3(get)]
     pub laterality: Laterality,
 
     #[pyo3(get)]
@@ -64,6 +67,7 @@ impl From<visualacuity::VisitNote> for VisitNote {
         Self {
             text: value.text.to_string(),
             text_plus: value.text_plus.to_string(),
+            data_quality: value.data_quality.into(),
             laterality: value.laterality.into(),
             distance_of_measurement: value.distance_of_measurement.into(),
             correction: value.correction.into(),
@@ -75,6 +79,33 @@ impl From<visualacuity::VisitNote> for VisitNote {
             log_mar_base_plus_letters: value.log_mar_base_plus_letters,
             plus_letters: value.plus_letters.into()
         }
+    }
+}
+
+#[pyclass(module="visualacuity")]
+#[derive(Hash, Clone, PartialEq, Debug)]
+pub enum DataQuality {
+    ERROR = 0,
+    UNRECOGNIZED = 1,
+    EXACT = 2,
+    CONVERTIBLE = 3,
+}
+
+impl From<visualacuity::DataQuality> for DataQuality {
+    fn from(value: visualacuity::DataQuality) -> Self {
+        use visualacuity::DataQuality::*;
+        match value {
+            Exact => Self::EXACT,
+            Convertible => Self::CONVERTIBLE,
+            Unrecognized => Self::UNRECOGNIZED,
+        }
+    }
+}
+
+#[pymethods]
+impl DataQuality {
+    fn __hash__(&self) -> u64 {
+        py_hash(self)
     }
 }
 

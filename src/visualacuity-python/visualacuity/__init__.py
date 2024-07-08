@@ -2,6 +2,7 @@ from visualacuity import _lib
 from visualacuity._types import (
     Visit,
     VisitNote,
+    DataQuality,
     Laterality,
     DistanceOfMeasurement,
     Correction,
@@ -13,6 +14,10 @@ from visualacuity._parse import (
 )
 
 # Alias some enums for convenience:
+
+EXACT = DataQuality.EXACT
+CONVERTIBLE = DataQuality.CONVERTIBLE
+UNRECOGNIZED = DataQuality.UNRECOGNIZED
 
 OS = Laterality.OS
 OD = Laterality.OD

@@ -35,7 +35,7 @@ fn parse_notes(notes: &str) -> VisualAcuityResult<Vec<ParsedItem>> {
     let notes_temp = binding.as_str();
 
     match CHART_NOTES_PARSER.parse(notes, notes_temp) {
-        Ok(p) => Ok(p.into_iter().collect()),
+        Ok(Content { content: p, .. }) => Ok(p.into_iter().collect()),
         Err(e) => Err(ParseError(format!("{e:?}: {notes_temp}")))
     }
 }
@@ -280,8 +280,8 @@ fn test_base_and_plus_letters(
     expected: (ParsedItem, Vec<i32>)
 ) -> Result<(), anyhow::Error> {
     let parser = Parser::new();
-    let parsed_notes = parser.parse_text(notes);
-    let parsed_plus = parser.parse_text(plus);
+    let parsed_notes = parser.parse_text(notes).content;
+    let parsed_plus = parser.parse_text(plus).content;
     let combined: ParsedItemCollection = [parsed_notes, parsed_plus].into_iter().flatten().collect();
     let base_item = combined.base_acuity()?;
     let plus_letters = combined.plus_letters();
@@ -299,7 +299,7 @@ fn test_visit_details(
     expected: VisualAcuityResult<Vec<ParsedItem>>
 ) -> Result<(), anyhow::Error> {
     let parser = Parser::new();
-    let actual = parser.parse_text(notes);
+    let actual = parser.parse_text(notes).content;
     let expected = expected.map(|e| e.into_iter().collect())?;
     assert_eq!(actual, expected);
     Ok(())
@@ -354,6 +354,7 @@ fn test_log_mar_base(
         (("Both Eyes Distance CC".to_string()), VisitNote {
             text: "20/20".to_string(),
             text_plus: "-2".to_string(),
+            data_quality: DataQuality::Exact,
             laterality: Laterality::OU,
             distance_of_measurement: DistanceOfMeasurement::Distance,
             correction: Correction::CC,
@@ -375,6 +376,7 @@ fn test_log_mar_base(
         ("Visual Acuity Right Eye Distance CC".to_string(), VisitNote {
             text: "20/100-1+2 ETDRS  (sc eccentric fixation)".to_string(),
             text_plus: "".to_string(),
+            data_quality: DataQuality::Exact,
             laterality: Laterality::OD,
             distance_of_measurement: DistanceOfMeasurement::Distance,
             correction: Correction::Error(MultipleValues(format ! ("[CC, SC]"))),
@@ -397,6 +399,7 @@ fn test_log_mar_base(
         ("Visual Acuity Right Eye Distance CC".to_string(), VisitNote {
             text: "20/20 J5".to_string(),
             text_plus: "".to_string(),
+            data_quality: DataQuality::Exact,
             laterality: Laterality::OD,
             distance_of_measurement: DistanceOfMeasurement::Distance,
             correction: Correction::CC,
@@ -440,7 +443,7 @@ fn test_visit<'a, I, E>(
 )]
 #[test_case(
     [("", "CF 2'")],
-    Ok([("", "CF @ 2.0 feet")])
+    Ok([("", "CF @ 2 feet")])
 )]
 #[test_case(
     [("", "CF at 8 feet to 20/400")],

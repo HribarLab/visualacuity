@@ -14,8 +14,10 @@ mod charts;
 
 #[cfg(test)]
 mod tests;
+mod macros;
+mod helpers;
+mod dataquality;
 
-pub use types::*;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 pub use visit::{Visit, VisitNote};
@@ -24,15 +26,17 @@ use crate::ParsedItem::*;
 use crate::VisualAcuityError::{*};
 use crate::cache::LruCacher;
 use crate::parser::{Parse, ChartNotesParser};
+pub(crate) use crate::parser::Content;
 pub use crate::errors::{VisualAcuityError, VisualAcuityResult};
 
 pub use structure::*;
 pub use distanceunits::*;
 pub use visitinput::VisitInput;
+pub use dataquality::DataQuality;
 
 pub struct Parser {
     notes_parser: &'static ChartNotesParser,
-    parse_cache: LruCacher<String, ParsedItemCollection>,
+    parse_cache: LruCacher<String, (DataQuality, ParsedItemCollection)>,
     column_merger: ColumnMerger
 }
 
@@ -76,20 +80,20 @@ impl Parser {
     ) -> VisualAcuityResult<VisitNote> {
         let parsed_text = self.parse_text(text);
         let parsed_text_plus = self.parse_text(text_plus);
-        let parsed_notes = [parsed_text, parsed_text_plus].into_iter().flatten().collect();
         let parsed_key = self.parse_text(key);
-        VisitNote::new(text.to_string(), text_plus.to_string(), parsed_key, parsed_notes)
+        VisitNote::new(parsed_text, parsed_text_plus, parsed_key)
     }
 
-    fn parse_text(&self, notes: &str) -> ParsedItemCollection {
-        self.parse_cache.get(&notes.trim().to_string(), || {
+    fn parse_text<'input>(&self, notes: &'input str) -> Content<'input, ParsedItemCollection> {
+        let (dq, content) = self.parse_cache.get(&notes.trim().to_string(), || {
             let notes = notes.trim();
             let binding = notes.to_lowercase();
             let notes_temp = binding.as_str();
             match self.notes_parser.parse(notes, notes_temp) {
-                Ok(p) => p,
-                Err(e) => [Unhandled(format!(" {e}"))].into_iter().collect()
+                Ok(Content { content, dq, .. }) => (dq, content),
+                Err(e) => (DataQuality::Unrecognized, ParsedItemCollection(vec![Unhandled(format!(" {e}"))]))
             }
-        })
+        });
+        Content::new(content, notes, dq)
     }
 }

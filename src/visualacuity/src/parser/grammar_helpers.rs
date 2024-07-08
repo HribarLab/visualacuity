@@ -12,7 +12,7 @@ use crate::charts::ChartRow;
 use crate::parser::decorator::Content;
 use crate::VisualAcuityError::ParseError;
 
-pub(crate) fn merge_consecutive_texts<'a>(items: Vec<Content<'a, ParsedItem>>) -> ParsedItemCollection {
+pub(crate) fn merge_consecutive_texts<'a>(items: Vec<Content<'a, ParsedItem>>) -> Content<'a, ParsedItemCollection> {
     items.into_iter()
         .map(validate)
         .fold(vec![], |mut accum, next| {
@@ -27,7 +27,6 @@ pub(crate) fn merge_consecutive_texts<'a>(items: Vec<Content<'a, ParsedItem>>) -
             accum
         })
         .into_iter()
-        .map(|item| item.content)
         .collect()
 }
 
@@ -94,9 +93,10 @@ pub(crate) fn handle_error<'a>(boxed_value: Content<'a, ErrorRecovery<usize, Tok
 
 #[cfg(test)]
 mod tests {
+    use crate::dataquality::DataQuality;
     use crate::parser::grammar_helpers::merge_consecutive_texts;
     use crate::ParsedItem::*;
-    use crate::parser::decorator::{Content, DataQuality};
+    use crate::parser::decorator::Content;
 
     #[test]
     fn test_merge_texts() {
@@ -112,7 +112,7 @@ mod tests {
             )
         ];
         for (va, expected) in test_cases {
-            let actual = merge_consecutive_texts(va);
+            let actual = merge_consecutive_texts(va).content;
             assert_eq!(actual, expected.into_iter().collect());
         }
     }

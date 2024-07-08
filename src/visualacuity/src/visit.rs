@@ -4,6 +4,8 @@ use derive_more::IntoIterator;
 use crate::{Correction, CorrectionItem, DistanceOfMeasurement, Laterality, ParsedItem, ParsedItemCollection, VisualAcuityResult};
 use crate::logmar::{LogMarBase, LogMarPlusLetters};
 use crate::ParsedItem::*;
+use crate::dataquality::DataQuality;
+use crate::parser::Content;
 use crate::snellen_equivalent::SnellenEquivalent;
 use crate::structure::{Disambiguate, Fraction, VAFormat, PinHole};
 
@@ -18,6 +20,9 @@ pub struct VisitNote {
     pub text: String,
     /// The contents of the associated "Plus" field, when available
     pub text_plus: String,
+
+    /// Data quality label
+    pub data_quality: DataQuality,
 
     /// The laterality (typically retrieved from the field name)
     pub laterality: Laterality,
@@ -47,11 +52,14 @@ impl VisitNote {
     /// Given a variable length set of `ParsedItem`s, determine which items represent the visual
     /// acuity measurements etc. The task here mostly has to do with prioritization/disambiguation.
     pub(crate) fn new(
-        text: String,
-        text_plus: String,
-        parsed_key: ParsedItemCollection,
-        parsed_notes: ParsedItemCollection,
+        parsed_text: Content<ParsedItemCollection>,
+        parsed_text_plus: Content<ParsedItemCollection>,
+        parsed_key: Content<ParsedItemCollection>,
     ) -> VisualAcuityResult<Self> {
+        let Content { input: text, content: parsed_text, dq, .. } = parsed_text;
+        let Content { input: text_plus,  content: parsed_text_plus, .. } = parsed_text_plus;
+        let Content { content: parsed_key, .. } = parsed_key;
+        let parsed_notes = ParsedItemCollection([parsed_text, parsed_text_plus].into_iter().flatten().collect());
         let sifted = SiftedParsedItems::sift(parsed_key, parsed_notes);
 
         let base_acuity = base_acuity(&sifted.acuities, &sifted.other_observations);
@@ -67,8 +75,8 @@ impl VisitNote {
         let plus_letters = sifted.plus_letters;
 
         Ok(VisitNote {
-            text, text_plus, extracted_value, distance_of_measurement, correction, pinhole,
-            laterality, plus_letters,
+            text: text.to_string(), text_plus: text_plus.to_string(), extracted_value, data_quality: dq,
+            distance_of_measurement, correction, pinhole, laterality, plus_letters,
             va_format, snellen_equivalent, log_mar_base, log_mar_base_plus_letters
         })
     }

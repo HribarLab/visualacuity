@@ -4,19 +4,19 @@
 
 type E<'a> = lalrpop_util::ParseError<usize, lalrpop_util::lexer::Token<'a>, &'static str>;
 
-pub(crate) trait Parse<T> {
-    fn parse<'a>(&'a self, orig: &'a str, s: &'a str) -> Result<T, E>;
+pub(crate) trait Parse<'a, T> {
+    fn parse(&'a self, orig: &'a str, s: &'a str) -> Result<T, E>;
     fn new() -> Self;
 }
 
 macro_rules! impl_parser {
     ($p:ty, $i:ty, $t:ty) => {
-        impl Parse<$t> for $p {
+        impl<'a> Parse<'a, $t> for $p {
             fn new() -> Self {
                 Self(<$i>::new())
             }
 
-            fn parse<'a>(&'a self, orig: &'a str, s: &'a str) -> Result<$t, E> {
+            fn parse(&'a self, orig: &'a str, s: &'a str) -> Result<$t, E> {
                 self.0.parse(orig, s)
             }
         }
@@ -25,7 +25,7 @@ macro_rules! impl_parser {
 
 // Wrap these types so we can do trait implementation
 pub(crate) struct ChartNotesParser(crate::parser::grammar::ChartNotesParser);
-impl_parser!(ChartNotesParser, crate::parser::grammar::ChartNotesParser, crate::ParsedItemCollection);
+impl_parser!(ChartNotesParser, crate::parser::grammar::ChartNotesParser, crate::Content<'a, crate::ParsedItemCollection>);
 
 pub(crate) struct PlusLettersParser(crate::parser::grammar::PlusLettersParser);
 impl_parser!(PlusLettersParser, crate::parser::grammar::PlusLettersParser, crate::ParsedItem);

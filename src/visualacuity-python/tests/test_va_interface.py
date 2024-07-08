@@ -12,6 +12,7 @@ class TestVAInterface(unittest.TestCase):
             (
                 {"Both Eyes Distance CC": "20/30 -1"},
                 {"Both Eyes Distance CC": VisitNote(
+                    data_quality=EXACT,
                     laterality=OU,
                     distance_of_measurement=DISTANCE,
                     correction=CC,
@@ -26,6 +27,7 @@ class TestVAInterface(unittest.TestCase):
             (
                 {"Both Eyes Distance CC": "20/20", "Both Eyes Distance CC Plus": "+2"},
                 {"Both Eyes Distance CC": VisitNote(
+                    data_quality=EXACT,
                     laterality=OU,
                     distance_of_measurement=DISTANCE,
                     correction=CC,
@@ -49,6 +51,7 @@ class TestVAInterface(unittest.TestCase):
                 },
                 {
                     "Both Eyes Distance CC": VisitNote(
+                        data_quality=EXACT,
                         laterality=OU,
                         distance_of_measurement=DISTANCE,
                         correction=CC,
@@ -60,6 +63,7 @@ class TestVAInterface(unittest.TestCase):
                         log_mar_base_plus_letters=0.03230333766935213,
                     ),
                     "Both Eyes Distance SC": VisitNote(
+                        data_quality=EXACT,
                         laterality=OU,
                         distance_of_measurement=DISTANCE,
                         correction=SC,
@@ -71,6 +75,7 @@ class TestVAInterface(unittest.TestCase):
                         log_mar_base_plus_letters=0.016151668834676065,
                     ),
                     "Both Eyes Near CC": VisitNote(
+                        data_quality=EXACT,
                         laterality=OU,
                         distance_of_measurement=NEAR,
                         correction=CC,

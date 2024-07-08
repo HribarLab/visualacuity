@@ -1,9 +1,12 @@
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
+
 use lazy_static::lazy_static;
 use regex::Regex;
+
 use crate::{VisualAcuityError, VisualAcuityResult};
-use crate::DistanceUnits::{Centimeters, Feet};
+use crate::DistanceUnits::*;
 use crate::VisualAcuityError::ParseError;
 
 #[derive(Default, Debug, Clone, PartialEq)]

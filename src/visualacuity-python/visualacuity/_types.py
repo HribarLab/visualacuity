@@ -8,6 +8,13 @@ class _ConciseEnumRepr:
     def __repr__(self):
         return self.name
 
+
+class DataQuality(_ConciseEnumRepr, Enum):
+    UNRECOGNIZED = "Unrecognized"
+    EXACT = "Exact"
+    CONVERTIBLE = "Convertible"
+
+
 class Laterality(_ConciseEnumRepr, Enum):
     ERROR = "Error"
     UNKNOWN = "Unknown"
@@ -54,6 +61,7 @@ class PinHole(_ConciseEnumRepr, Enum):
 class VisitNote:
     text: str = ""
     text_plus: str = ""
+    data_quality: DataQuality = DataQuality.UNRECOGNIZED
     laterality: Laterality = Laterality.UNKNOWN
     distance_of_measurement: DistanceOfMeasurement = DistanceOfMeasurement.UNKNOWN
     correction: Correction = Correction.UNKNOWN
