@@ -1,8 +1,10 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+
 use pyo3::{pyclass, pymethods, PyResult};
 use pyo3::exceptions::PyValueError;
-use visualacuity::VisualAcuityResult;
+
+use visualacuity::{OptionResult, VisualAcuityResult};
 
 #[pyclass(module="visualacuity._lib")]
 pub struct VisitNote {
@@ -25,9 +27,6 @@ pub struct VisitNote {
     pub correction: Correction,
 
     #[pyo3(get)]
-    pub va_format: VAFormat,
-
-    #[pyo3(get)]
     pub plus_letters: Vec<i32>,
 
     #[pyo3(get)]
@@ -36,6 +35,7 @@ pub struct VisitNote {
     #[pyo3(get)]
     pub pinhole: PinHole,
 
+    va_format: VisualAcuityResult<VAFormat>,
     snellen_equivalent: VisualAcuityResult<Option<(f64, f64)>>,
     log_mar_base: VisualAcuityResult<Option<f64>>,
     log_mar_base_plus_letters: VisualAcuityResult<Option<f64>>,
@@ -43,6 +43,12 @@ pub struct VisitNote {
 
 #[pymethods]
 impl VisitNote {
+    #[getter]
+    fn va_format(&self) -> PyResult<VAFormat> {
+        self.va_format.clone()
+            .or_else(|e| Err(PyValueError::new_err(format!("{:?}", e))))
+    }
+
     #[getter]
     fn snellen_equivalent(&self) -> PyResult<Option<(f64, f64)>> {
         self.snellen_equivalent.clone()
@@ -72,11 +78,11 @@ impl From<visualacuity::VisitNote> for VisitNote {
             distance_of_measurement: value.distance_of_measurement.into(),
             correction: value.correction.into(),
             pinhole: value.pinhole.into(),
-            va_format: value.va_format.into(),
+            va_format: value.va_format.map(|va| va.into()),
             extracted_value: value.extracted_value,
-            snellen_equivalent: value.snellen_equivalent.map(|se| se.map(Into::into)),
-            log_mar_base: value.log_mar_base,
-            log_mar_base_plus_letters: value.log_mar_base_plus_letters,
+            snellen_equivalent: from_option_result(value.snellen_equivalent),
+            log_mar_base: from_option_result(value.log_mar_base),
+            log_mar_base_plus_letters: from_option_result(value.log_mar_base_plus_letters),
             plus_letters: value.plus_letters.into()
         }
     }
@@ -85,10 +91,13 @@ impl From<visualacuity::VisitNote> for VisitNote {
 #[pyclass(module="visualacuity")]
 #[derive(Hash, Clone, PartialEq, Debug)]
 pub enum DataQuality {
-    ERROR = 0,
-    UNRECOGNIZED = 1,
-    EXACT = 2,
-    CONVERTIBLE = 3,
+    NO_VALUE = 0,
+    EXACT = 1,
+    MULTIPLE = 2,
+    CROSS_REFERENCE = 3,
+    CONVERTIBLE_CONFIDENT = 4,
+    CONVERTIBLE_FUZZY = 5,
+    UNUSABLE = 999,
 }
 
 impl From<visualacuity::DataQuality> for DataQuality {
@@ -96,8 +105,12 @@ impl From<visualacuity::DataQuality> for DataQuality {
         use visualacuity::DataQuality::*;
         match value {
             Exact => Self::EXACT,
-            Convertible => Self::CONVERTIBLE,
-            Unrecognized => Self::UNRECOGNIZED,
+            Multiple => Self::MULTIPLE,
+            CrossReference => Self::CROSS_REFERENCE,
+            ConvertibleConfident => Self::CONVERTIBLE_CONFIDENT,
+            ConvertibleFuzzy => Self::CONVERTIBLE_FUZZY,
+            Unusable => Self::UNUSABLE,
+            NoValue => Self::NO_VALUE,
         }
     }
 }
@@ -112,7 +125,6 @@ impl DataQuality {
 #[pyclass(module="visualacuity")]
 #[derive(Hash, Clone, PartialEq, Debug)]
 pub enum Laterality {
-    ERROR = 0,
     UNKNOWN = 1,
     OS = 2,
     OD = 3,
@@ -130,7 +142,7 @@ impl From<visualacuity::Laterality> for Laterality {
     fn from(value: visualacuity::Laterality) -> Self {
         use visualacuity::Laterality::*;
         match value {
-            Error(_) => Self::ERROR,
+            // Error(_) => Self::ERROR,
             Unknown => Self::UNKNOWN,
             OS => Self::OS,
             OD => Self::OD,
@@ -142,7 +154,6 @@ impl From<visualacuity::Laterality> for Laterality {
 #[pyclass(module="visualacuity")]
 #[derive(Hash, Clone, PartialEq, Debug)]
 pub enum DistanceOfMeasurement {
-    ERROR = 0,
     UNKNOWN = 1,
     NEAR = 2,
     DISTANCE = 3,
@@ -159,7 +170,7 @@ impl From<visualacuity::DistanceOfMeasurement> for DistanceOfMeasurement {
     fn from(value: visualacuity::DistanceOfMeasurement) -> Self {
         use visualacuity::DistanceOfMeasurement::*;
         match value {
-            Error(_) => Self::ERROR,
+            // Error(_) => Self::ERROR,
             Unknown => Self::UNKNOWN,
             Near => Self::NEAR,
             Distance => Self::DISTANCE,
@@ -170,10 +181,10 @@ impl From<visualacuity::DistanceOfMeasurement> for DistanceOfMeasurement {
 #[pyclass(module="visualacuity")]
 #[derive(Hash, Clone, PartialEq, Debug)]
 pub enum Correction {
-    ERROR = 0,
     UNKNOWN = 1,
     CC = 2,
     SC = 3,
+    MANIFEST = 4,
 }
 
 #[pymethods]
@@ -186,10 +197,11 @@ impl Correction {
 impl From<visualacuity::Correction> for Correction {
     fn from(value: visualacuity::Correction) -> Self {
         match value {
-            visualacuity::Correction::Error(_) => Self::ERROR,
+            // visualacuity::Correction::Error(_) => Self::ERROR,
             visualacuity::Correction::Unknown => Self::UNKNOWN,
             visualacuity::Correction::CC => Self::CC,
             visualacuity::Correction::SC => Self::SC,
+            visualacuity::Correction::Manifest => Self::MANIFEST
         }
     }
 }
@@ -197,16 +209,16 @@ impl From<visualacuity::Correction> for Correction {
 #[pyclass(module="visualacuity")]
 #[derive(Hash, Clone, PartialEq, Debug)]
 pub enum VAFormat {
-    ERROR = 0,
     UNKNOWN = 1,
     SNELLEN = 2,
     JAEGER = 3,
     ETDRS = 4,
     TELLER = 5,
     NEAR_TOTAL_LOSS = 6,
-    PIN_HOLE = 7,
-    BINOCULAR = 8,
-    NOT_TAKEN = 9,
+    VISUAL_RESPONSE = 7,
+    PIN_HOLE = 8,
+    BINOCULAR = 9,
+    NOT_TAKEN = 10,
 }
 
 #[pymethods]
@@ -220,13 +232,13 @@ impl From<visualacuity::VAFormat> for VAFormat {
     fn from(value: visualacuity::VAFormat) -> Self {
         use visualacuity::VAFormat::*;
         match value {
-            Error(_) => Self::ERROR,
             Unknown => Self::UNKNOWN,
             Snellen => Self::SNELLEN,
             Jaeger => Self::JAEGER,
             ETDRS => Self::ETDRS,
             Teller => Self::TELLER,
             NearTotalLoss => Self::NEAR_TOTAL_LOSS,
+            VisualResponse => Self::VISUAL_RESPONSE,
             PinHole => Self::PIN_HOLE,
             Binocular => Self::BINOCULAR,
             NotTaken => Self::NOT_TAKEN,
@@ -237,7 +249,7 @@ impl From<visualacuity::VAFormat> for VAFormat {
 #[pyclass(module="visualacuity")]
 #[derive(Hash, Clone, PartialEq, Debug)]
 pub enum PinHole {
-    ERROR = 0,
+    // ERROR = 0,
     UNKNOWN = 1,
     WITH = 2,
     WITHOUT = 3,
@@ -255,7 +267,7 @@ impl From<visualacuity::PinHole> for PinHole {
     fn from(value: visualacuity::PinHole) -> Self {
         use visualacuity::PinHole::*;
         match value {
-            Error(_) => Self::ERROR,
+            // Error(_) => Self::ERROR,
             Unknown => Self::UNKNOWN,
             With => Self::WITH,
             Without => Self::WITHOUT,
@@ -267,4 +279,12 @@ fn py_hash<T: Hash>(obj: &T) -> u64 {
     let mut hasher = DefaultHasher::new();
     obj.hash(&mut hasher);
     hasher.finish()
+}
+
+fn from_option_result<T, U: From<T>>(value: OptionResult<T>) -> VisualAcuityResult<Option<U>> {
+    match value {
+        OptionResult::None => Ok(None),
+        OptionResult::Some(v) => Ok(Some(v.into())),
+        OptionResult::Err(e) => Err(e)
+    }
 }

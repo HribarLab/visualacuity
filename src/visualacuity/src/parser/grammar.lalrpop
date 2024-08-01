@@ -1,10 +1,11 @@
+use std::collections::HashSet;
+
 use crate::*;
 use crate::parser::grammar_helpers::*;
 use crate::parser::decorator::*;
 use crate::ParsedItem::*;
 use crate::FixationPreference::*;
 use crate::VisualAcuityError::*;
-use crate::DistanceOfMeasurement::*;
 use crate::Laterality::*;
 use crate::Correction::*;
 use crate::DistanceOfMeasurement::*;
@@ -37,8 +38,6 @@ Integer: u64 = {
 
 // A few common token groups
 Negation = { "no", "not" }
-OtherToken = { r#"\p{Letter}+"#, r#"\p{Symbol}"#, r#"\p{Punctuation}"# };
-
 
 // Top-level chart notes. Uses a helper function to merge consecutive "Text()" elements
 pub ChartNotes: Content<'input, ParsedItemCollection> = {
@@ -47,20 +46,19 @@ pub ChartNotes: Content<'input, ParsedItemCollection> = {
 
 // Each type of `ParsedItem`, decorated with data quality annotations
 pub(crate) VA: Content<'input, ParsedItem> = {
-    DQExact<SnellenExact>,
-    DQExact<JaegerExact>,
-    DQConvertible<JaegerConvertible>,
-    DQExact<ETDRSExact>,
-    DQExact<TellerExact>,
-    DQExact<PlusLetters>,
-    DQExact<PinHoleNI>,
-    DQExact<NearTotalLossExact>,
-    DQConvertible<NearTotalLossConvertible>,
-    DQExact<BinocularFixation>,
-    DQUnrecognized<NotTaken>,
-    DQExact<VisitInfo>,
-    DQUnrecognized<OtherToken> => <>.map(|t| Text(t.to_string())),
-    DQUnrecognized<!> => handle_error(<>)
+    DQExact<SnellenExact> => <>,
+    DQExact<JaegerExact> => <>,
+    DQConvertibleConfident<JaegerConvertibleConfident> => <>,
+    DQExact<ETDRSExact> => <>,
+    DQExact<TellerExact> => <>,
+    DQExact<PlusLetters> => <>,
+    DQCrossReference<CrossReferenceItem> => <>,
+    DQExact<NearTotalLossExact> => <>,
+    DQNoValue<VisualResponseExact> => <>,
+    DQNoValue<NotTaken> => <>,
+    DQConvertibleConfident<OtherTextKnown> => <>.map(|t| Text(t.to_string())),
+    DQConvertibleFuzzy<OtherTextUnknown> => <>.map(|t| Text(t.to_string())),
+    DQConvertibleFuzzy<!> => handle_error(<>)
 };
 
 // SNELLEN
@@ -77,7 +75,7 @@ JaegerRow = {
     "j1+", "j1", "j2", "j3", "j4", "j5", "j6", "j7", "j8", "j9", "j10", "j11", "j12", "j13", "j14", "j15",
     "j16", "j17", "j18", "j19", "j20", "j21", "j22", "j23", "j24", "j25", "j26", "j27", "j28", "j29", "j30",
 };
-pub(crate) JaegerConvertible: ParsedItem = {
+pub(crate) JaegerConvertibleConfident: ParsedItem = {
     "j0" => Jaeger(format!("J1+")),
 };
 
@@ -102,54 +100,61 @@ NearTotalLossExact: ParsedItem = {
     "lp" <d:DistanceUnits?> => NearTotalLoss(format!("LP"), d.unwrap_or_default()),
     "nlp" => NearTotalLoss(format!("NLP"), DistanceUnits::NotProvided),
 };
-NearTotalLossConvertible: ParsedItem = {
-    Negation BTLConvertible => NearTotalLoss(format!("NLP"), DistanceUnits::NotProvided),
-    BTLConvertible => NearTotalLoss(format!("LP"), DistanceUnits::NotProvided),
-    Sensitive "to"? "light" => NearTotalLoss(format!("LP"), DistanceUnits::NotProvided),
-};
-BTLConvertible = {
-    "btl", "rtl", "wtl", "b" "to" "l" => orig, "r" "to" "l" => orig, "w" "to" "l" => orig,
-};
-Sensitive = {
-    "closing" "eye" => orig, "closing" "eyes" => orig, "closes" "eye" => orig, "closes" "eyes" => orig,
-    "averts", "averse", "adverse", "bat", "bats", "batting", "blink", "blinking", "blinks",
-    "dazzle", "dazzles", "dazzling", "flinch", "flinches", "flinching", "fuss", "fusses", "fussing",
-    "grimace", "grimaces", "grimacing", "look",  "looking", "looks", "objection", "objecting", "objects",
-    "protest", "protests", "protesting", "react", "reaction", "reacting", "reacts",
-    "response", "responds", "responsive", "responding", "rxn", "squint", "squinting", "squints",
-    "wince", "winces", "wincing", "whince", "whinces", "whincing", "whinch", "whinches", "whinching",
-    "withdraw", "withdraws", "withdrawing",
-};
-pub(crate) PinHoleNI: ParsedItem = {
-    "ni" => PinHoleEffectItem(PinHoleEffect::NI),
-};
 
-// BINOCULAR FIXATION
-BinocularFixation: ParsedItem = {
-    BinocularFixationPreference => BinocularFixation(<>),
+// OTHER VISUAL RESPONSES
+VisualResponseExact: ParsedItem = {
+    BTL => VisualResponse(<>.to_uppercase()),
+    Negation <s:ToUpper<BTL>> => VisualResponse(format!("no {s}")),
+    FixAndFollow => VisualResponse(s!("fix & follow")),
+    Negation FixAndFollow => VisualResponse(s!("no fix & follow")),
+    "fix" "no" "follow" => VisualResponse(s!("fix, no follow")),
+    "averts" ToLight => VisualResponse(s!("averts to light")),
+    "averse" ToLight => VisualResponse(s!("averse to light")),
+    "adverse" ToLight => VisualResponse(s!("adverse to light")),
+    ClosesEyes ToLight => VisualResponse(s!("closes eyes to light")),
+    Bats ToLight => VisualResponse(s!("bats to light")),
+    Blinks ToLight => VisualResponse(s!("BTL")),
+    Dazzles ToLight => VisualResponse(s!("dazzles to light")),
+    Flinches ToLight => VisualResponse(s!("flinches to light")),
+    Fusses ToLight => VisualResponse(s!("fusses to light")),
+    Grimaces ToLight => VisualResponse(s!("grimaces to light")),
+    Looks ToLight => VisualResponse(s!("looks to light")),
+    Objects ToLight => VisualResponse(s!("objects to light")),
+    Protests "light" => VisualResponse(s!("protests light")),
+    Reacts ToLight => VisualResponse(s!("reacts to light")),
+    Responds ToLight => VisualResponse(s!("responds to light")),
+    Squints ToLight => VisualResponse(s!("squints to light")),
+    Winces ToLight => VisualResponse(s!("WTL")),
+    Whinches ToLight => VisualResponse(s!("whinches to light")),
+    Withdraw ToLight => VisualResponse(s!("withdraw to light")),
+    ToUpper<BinocularFixationPreference> => VisualResponse(<>),
+    <b:ToUpper<BinocularFixationPreference>> Prefers => VisualResponse(format!("{b} prefers")),
+    <b:ToUpper<BinocularFixationPreference>> Holds => VisualResponse(format!("{b} holds")),
+}
+BTL: &'input str = {
+    "btl", "rtl", "wtl", "b" "to" "l" => "btl", "r" "to" "l" => "rtl", "w" "to" "l" => "wtl",
 };
-BinocularFixationPreference: FixationPreference = {
-    "csm" => CSM,
-    "cusm" => CUSM,
-    "csum" => CSUM,
-    "cusum" => CUSUM,
-    "ucsm" => UCSM,
-    "ucusm" => UCUSM,
-    "ucsum" => UCSUM,
-    "ucusum" => UCUSUM,
-    "ff" => FixAndFollow,
-    "f" And? "f" => FixAndFollow,
-    "f" "/" "f" => FixAndFollow,
-    "fix" And? "follow" => FixAndFollow,
-    Negation "fix" And? "follow" => NoFixAndFollow,
-    "fix" "no" "follow" => FixNoFollow,
-    "prefers" => Prefers,
-    "prefer" => Prefers,
-    "pref" => Prefers,
-    "p" => Prefers,
-    "holds" => Holds,
-    "hold" => Holds,
-};
+ToLight = { "to" "light" };
+Bats = { "bat", "bats", "batting" };
+Blinks = { "blink", "blinking", "blinks" };
+ClosesEyes = { "closing" "eye", "closing" "eyes", "closes" "eye", "closes" "eyes" };
+Dazzles = { "dazzle", "dazzles", "dazzling" };
+Flinches = { "flinch", "flinches", "flinching" };
+Fusses = { "fuss", "fusses", "fussing" };
+Grimaces = { "grimace", "grimaces", "grimacing" };
+Looks = { "look",  "looking", "looks" };
+Objects = { "objection", "objecting", "objects" };
+Protests = { "protest", "protests", "protesting" };
+Reacts = { "react", "reaction", "reacting", "reacts", "rxn" };
+Responds = { "response", "responds", "responsive", "responding" };
+Squints = { "squint", "squinting", "squints" };
+Winces = { "wince", "winces", "wincing", "whince", "whinces", "whincing" };
+Whinches = { "whinch", "whinches", "whinching" };
+Withdraw = { "withdraw", "withdraws", "withdrawing" };
+BinocularFixationPreference = { "csm", "cusm", "csum", "cusum", "ucsm", "ucusm", "ucsum", "ucusum"} ;
+Prefers = { "prefer", "prefers", "pref", "p" };
+Holds = { "hold", "holds" };
+FixAndFollow = { "ff", "f" And? "f" => orig, "f" "/" "f" => orig, "fix" And? "follow" => orig };
 And = { "and", "+", "&" }
 NotTaken: ParsedItem = {
     "not" "taken" => NotTakenItem(NotTakenReason::NT),
@@ -162,6 +167,10 @@ NotTaken: ParsedItem = {
 };
 Prosthesis = {
     "pros", "pros.", "prostheses", "prosthesis", "prosthesis.", "prosthestic", "prosthet", "prosthetic", "prosthetic."
+};
+
+pub(crate) CrossReferenceItem: ParsedItem = {
+    ToUpper<"ni"> => CrossReferenceItem(<>),
 };
 
 // PLUS LETTERS (eg. 20/40+1)
@@ -185,33 +194,92 @@ pub(crate) DistanceUnits: DistanceUnits = {
 At = { "at", "@" };
 Feet = { "feet", "foot", "ft.", "ft", "f.", "f", "'" };
 
-// VISIT INFO
-pub(crate) VisitInfo: ParsedItem = {
-    VisitDistance,
-    VisitEye,
-    VisitCorrection,
-    VisitPinHole,
-};
-VisitDistance: ParsedItem = {
-    "near" => DistanceItem(Near),
-    "distance" => DistanceItem(Distance),
-};
-VisitEye: ParsedItem = {
-    "os" =>  LateralityItem(OS),
-    "od" => LateralityItem(OD),
-    "ou" => LateralityItem(OU),
-    "left" "eye" =>  LateralityItem(OS),
-    "right" "eye" => LateralityItem(OD),
-    "both" "eyes" => LateralityItem(OU),
-};
-VisitCorrection: ParsedItem = {
-    "sc" => CorrectionItem(SC),
-    "cc" => CorrectionItem(CC),
-}
-VisitPinHole: ParsedItem = {
-    "pin" "hole" => PinHoleItem(PinHole::With),
-    "pinhole" => PinHoleItem(PinHole::With),
-    "ph" => PinHoleItem(PinHole::With),
+//// VISIT INFO
+//pub(crate) VisitInfo: ParsedItem = {
+//    VisitDistance,
+//    VisitEye,
+//    VisitCorrection,
+//    VisitPinHole,
+//};
+//VisitDistance: ParsedItem = {
+//    "near" => DistanceItem(Near),
+//    "distance" => DistanceItem(Distance),
+//};
+//VisitEye: ParsedItem = {
+//    "os" =>  LateralityItem(OS),
+//    "od" => LateralityItem(OD),
+//    "ou" => LateralityItem(OU),
+//    "left" "eye" =>  LateralityItem(OS),
+//    "right" "eye" => LateralityItem(OD),
+//    "both" "eyes" => LateralityItem(OU),
+//};
+//VisitCorrection: ParsedItem = {
+//    "sc" => CorrectionItem(SC),
+//    "cc" => CorrectionItem(CC),
+//    "manifest" => CorrectionItem(Manifest)
+//}
+//VisitPinHole: ParsedItem = {
+//    "pin" "hole" => PinHoleItem(PinHole::With),
+//    "pinhole" => PinHoleItem(PinHole::With),
+//    "ph" => PinHoleItem(PinHole::With),
+//}
+
+//DQKnownUnknown<T>: Content<'input, T> = {
+//    <left:@L> <content:T> <right:@R> => {
+//        static KNOWN_WORDS: HashSet<&'static str> = [
+//
+//        ].into_iter().collect();
+//        Content { content, input: orig, left, right, data_quality: DataQuality::ConvertibleConfident, }
+//    }
+//};
+
+OtherTextUnknown = { r#"\p{Letter}+"#, r#"\p{Symbol}"#, r#"\p{Punctuation}"# };
+OtherTextKnown = {
+    "+",
+    "-",
+    "bare",
+    "barely",
+    "blurrier",
+    "blurry",
+    "cl",
+    "double",
+    "doubled",
+    "easy",
+    "ecc",
+    "ecc.",
+    "eccc",
+    "ecccentric",
+    "ecce",
+    "eccen",
+    "eccentri",
+    "eccentric",
+    "eccentrically",
+    "eccentricly",
+    "effort",
+    "fixation",
+    "fuzzy",
+    "glimpse",
+    "good",
+    "gp",
+    "guessing",
+    "hybrid",
+    "inferior",
+    "inferiorly",
+    "periph",
+    "peripheral",
+    "peripherally",
+    "scanning",
+    "scl",
+    "searching",
+    "slight",
+    "slow",
+    "soft",
+    "squinting",
+    "srx",
+    "superiorly",
+    "temporal",
+    "temporally",
+    "through",
 }
 
 //** TOKENIZATION **
@@ -235,17 +303,29 @@ match {
     _ // catch-all
 }
 
+String<T>: String = { <l:@L> <s:T> <r:@R> => orig[l..r].to_string() };
+ToUpper<T>: String = { String<T> => <>.to_uppercase() };
+
 // Data Quality decorators:
 // Using these constructs, we can annotate the data quality features of `ParsedItem`s right here in the grammar.
 
-DQUnrecognized<T>: Content<'input, T> = {
-    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, dq: DataQuality::Unrecognized, }
+DQNoValue<T>: Content<'input, T> = {
+    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, data_quality: DataQuality::NoValue, }
 };
 
 DQExact<T>: Content<'input, T> = {
-    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, dq: DataQuality::Exact, }
+    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, data_quality: DataQuality::Exact, }
 };
 
-DQConvertible<T>: Content<'input, T> = {
-    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, dq: DataQuality::Convertible, }
+DQCrossReference<T>: Content<'input, T> = {
+    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, data_quality: DataQuality::CrossReference, }
 };
+
+DQConvertibleConfident<T>: Content<'input, T> = {
+    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, data_quality: DataQuality::ConvertibleConfident, }
+};
+
+DQConvertibleFuzzy<T>: Content<'input, T> = {
+    <left:@L> <content:T> <right:@R> => Content { content, input: orig, left, right, data_quality: DataQuality::ConvertibleFuzzy, }
+};
+

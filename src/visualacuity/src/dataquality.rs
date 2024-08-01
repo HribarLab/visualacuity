@@ -1,14 +1,11 @@
-#[derive(PartialEq, Debug, Clone, Default)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Default, )]
 pub enum DataQuality {
-    Exact,
-    Convertible,
     #[default]
-    Unrecognized,
-}
-
-impl DataQuality {
-    pub(crate) fn from_vec(items: Vec<DataQuality>) -> Self
-    {
-        items.first().cloned().unwrap_or_default()
-    }
+    NoValue = 0,
+    CrossReference = 1,
+    Exact = 2,
+    Multiple = 3,
+    ConvertibleConfident = 4,
+    ConvertibleFuzzy = 5,
+    Unusable = 999,
 }

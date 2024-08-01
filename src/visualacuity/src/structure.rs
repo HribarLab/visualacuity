@@ -4,16 +4,15 @@ use std::slice::Iter;
 use std::str::FromStr;
 
 use derive_more::{Deref, IntoIterator};
-use itertools::{ExactlyOneError, Itertools};
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::{DistanceUnits, VisualAcuityError, VisualAcuityResult};
+use crate::*;
+use crate::VisualAcuityError::*;
 use crate::charts::ChartRow;
 use crate::DistanceUnits::NotProvided;
 use crate::helpers::RoundPlaces;
-use crate::ParsedItem::*;
-use crate::VisualAcuityError::*;
 
 lazy_static! {
 static ref PATTERN_FRACTION: Regex = Regex::new(r"^\s*(\d+(?:\.\d*)?)\s*/\s*(\d+(?:\.\d*)?)\s*$").expect("");
@@ -40,10 +39,8 @@ impl<T: Into<f64>> From<(T, T)> for Fraction {
     fn from((n, d): (T, T)) -> Self { Self((n.into(), d.into())) }
 }
 
-impl From<Fraction> for (f64, f64) {
-    fn from(value: Fraction) -> Self {
-        *value
-    }
+impl<T: From<f64>> From<Fraction> for (T, T) {
+    fn from(fraction: Fraction) -> Self { (fraction.0.0.into(), fraction.0.1.into()) }
 }
 
 impl FromStr for Fraction {
@@ -84,11 +81,6 @@ impl Display for FixationPreference {
 }
 
 #[derive(Hash, Clone, Debug, PartialEq, Eq)]
-pub enum PinHoleEffect {
-    NI,
-}
-
-#[derive(Hash, Clone, Debug, PartialEq, Eq)]
 pub enum NotTakenReason {
     NT,
     Unable,
@@ -105,7 +97,8 @@ pub enum ParsedItem {
     Teller(String),
     ETDRS(String),
     NearTotalLoss(String, DistanceUnits),
-    PinHoleEffectItem(PinHoleEffect),
+    VisualResponse(String),
+    CrossReferenceItem(String),
     BinocularFixation(FixationPreference),
     PlusLettersItem(i32),
     NotTakenItem(NotTakenReason),
@@ -116,7 +109,6 @@ pub enum ParsedItem {
     CorrectionItem(Correction),
     PinHoleItem(PinHole),
 
-    // Comment { text: String },
     Text(String),  // text that isn't really part of a structured VA
     Unhandled(String),
 }
@@ -127,21 +119,22 @@ impl Display for ParsedItem {
             SnellenFraction(s)
             | Jaeger(s)
             | ETDRS(s)
-            | Teller(s) => {
+            | Teller(s)
+            | VisualResponse(s)
+            | CrossReferenceItem(s) => {
                 s.to_string()
             },
             PlusLettersItem(n) => if *n > 0 { format!("+{self}") } else { format!("{n}") },
-            PinHoleItem(effect) => format!("{effect:?}"),
             NearTotalLoss(method, distance) => match distance.to_feet() {
                 Ok(feet) => format!("{method} @ {} feet", feet.round_places(2)),
                 _ => format!("{method}")
             },
-            PinHoleEffectItem(effect) => format!("{effect:?}"),
             BinocularFixation(preference) => format!("{preference:?}"),
             NotTakenItem(reason) => format!("{reason:?}"),
             DistanceItem(d) => format!("{d}"),
             LateralityItem(l) => format!("{l}"),
             CorrectionItem(c) => format!("{c}"),
+            PinHoleItem(effect) => format!("{effect:?}"),
             Text(_) | Unhandled(_) => format!("[text]"), // No PHI leaking here!
         };
         write!(f, "{formatted}")
@@ -258,112 +251,9 @@ impl FromIterator<ParsedItem> for ParsedItemCollection {
     }
 }
 
-#[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Laterality {
-    Error(VisualAcuityError),
-    #[default]
-    Unknown,
-    OS,
-    OD,
-    OU
-}
-
-impl Display for Laterality {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-#[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum DistanceOfMeasurement {
-    Error(VisualAcuityError),
-    #[default]
-    Unknown,
-    Near,
-    Distance,
-}
-
-impl Display for DistanceOfMeasurement {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-pub(crate) trait Disambiguate where Self: Default + Clone + Eq + Hash  {
-    fn on_conflict<I: Iterator<Item=Self>>(e: ExactlyOneError<I>) -> Self;
-
-    fn disambiguate<I: IntoIterator<Item=Self> + Clone>(iter: &I) -> Self {
-        match iter.clone().into_iter().unique().at_most_one() {
-            Ok(Some(item)) => item,
-            Ok(None) => Self::default(),
-            Err(e) => Self::on_conflict(e)
-        }
-    }
-}
-
-impl Disambiguate for DistanceOfMeasurement {
-    fn on_conflict<I: Iterator<Item=Self>>(e: ExactlyOneError<I>) -> Self {
-        Self::Error(e.into())
-    }
-}
-
-impl Disambiguate for Laterality {
-    fn on_conflict<I: Iterator<Item=Self>>(e: ExactlyOneError<I>) -> Self {
-        Self::Error(e.into())
-    }
-}
-impl Disambiguate for Correction {
-    fn on_conflict<I: Iterator<Item=Self>>(e: ExactlyOneError<I>) -> Self {
-        Self::Error(e.into())
-    }
-}
-
-impl Disambiguate for VAFormat {
-    fn on_conflict<I: Iterator<Item=Self>>(e: ExactlyOneError<I>) -> Self {
-        Self::Error(e.into())
-    }
-}
-
-impl Disambiguate for PinHole {
-    fn on_conflict<I: Iterator<Item=Self>>(e: ExactlyOneError<I>) -> Self {
-        Self::Error(e.into())
-    }
-}
-
-#[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Correction {
-    Error(VisualAcuityError),
-    #[default]
-    Unknown,
-    CC,
-    SC,
-}
-
-impl Display for Correction {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-#[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum PinHole {
-    Error(VisualAcuityError),
-    #[default]
-    Unknown,
-    With,
-    Without,
-}
-
-
-impl Display for PinHole {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VAFormat {
-    Error(VisualAcuityError),
     #[default]
     Unknown,
     Snellen,
@@ -371,6 +261,7 @@ pub enum VAFormat {
     ETDRS,
     Teller,
     NearTotalLoss,
+    VisualResponse,
     PinHole,
     Binocular,
     NotTaken,
@@ -384,9 +275,11 @@ impl From<ParsedItem> for VAFormat {
             Teller { .. } => VAFormat::Teller,
             ETDRS { .. } => VAFormat::ETDRS,
             NearTotalLoss { .. } => VAFormat::NearTotalLoss,
-            PinHoleEffectItem(_) => VAFormat::PinHole,
+            VisualResponse { .. } => VAFormat::VisualResponse,
+            PinHoleItem(_) => VAFormat::PinHole,
             BinocularFixation(_) => VAFormat::Binocular,
             NotTakenItem(_) => VAFormat::NotTaken,
+            CrossReferenceItem(_) => VAFormat::Unknown,
             _ => VAFormat::Unknown,
         }
     }

@@ -8,6 +8,13 @@ lalrpop_util::lalrpop_mod!(
 grammar, "/parser/grammar.rs"
 );
 
+lalrpop_util::lalrpop_mod!(
+// synthesized by LALRPOP
+#[allow(unused_imports)]
+#[allow(dead_code)]
+key, "/parser/key.rs"
+);
+
 mod grammar_helpers;
 mod decorator;
 mod wrapper;

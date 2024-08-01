@@ -1,67 +1,71 @@
-use itertools::Itertools;
 use crate::*;
+use crate::helpers::RoundPlaces;
+use crate::tests::tsv_reader::TestCaseRow;
+use crate::VisualAcuityError::*;
 
+#[test]
+fn test_cases_conversions() -> VisualAcuityResult<()> {
+    let parser = Parser::new();
+    let content = include_str!("../../../../testing/test_cases_conversions.tsv");
+    for row in TestCaseRow::read_file(content) {
+        let input = [
+            ("EHR Entry", row.get("EHR Entry")?),
+            ("EHR Entry Plus", row.get("EHR Entry Plus")?),
+        ].into();
 
-#[derive(Default, Clone, PartialEq, Debug)]
-struct TestCaseConversion {
-    line_number: usize,
-    ehr_entry: String,
-    ehr_entry_plus: String,
-    snellen_equivalent: String,
-    log_mar_equivalent: String,
-    log_mar_plus_letters: String,
-    comment: String,
-}
+        let parsed = parser.parse_visit(input).unwrap();
+        let (_, note) = parsed.into_iter().next().unwrap();
+        let note = note.expect("TEST");
 
-impl TestCaseConversion {
-    fn load() -> Vec<TestCaseConversion> {
-        include_str!("../../../../testing/test_cases_conversions.tsv")
-            .lines()
-            .map(|l| l.split('\t').map(|s| s.to_string()).collect_tuple().unwrap())
-            .enumerate()
-            .skip(1)
-            .map(|(n, (
-                ehr_entry, ehr_entry_plus, snellen_equivalent, log_mar_equivalent,
-                log_mar_plus_letters, comment,
-              ))| TestCaseConversion {
-                line_number: n + 1, ehr_entry, ehr_entry_plus, snellen_equivalent,
-                log_mar_equivalent, log_mar_plus_letters, comment,
-            })
-            .filter(|tc| !tc.ehr_entry.starts_with('#'))
-            .collect_vec()
+        let expected = (
+            ("Snellen Equivalent", row.parse("Snellen Equivalent").map_err(|_| GenericError)),
+            ("LogMAR Equivalent", row.parse("LogMAR Equivalent").map_err(|_| GenericError)),
+            ("LogMAR Plus Letters", row.parse("LogMAR Plus Letters").map_err(|_| GenericError)),
+        );
+        let actual = (
+            ("Snellen Equivalent", note.snellen_equivalent.map_err(|_| GenericError)),
+            ("LogMAR Equivalent", note.log_mar_base.round_places(2).map_err(|_| GenericError)),
+            ("LogMAR Plus Letters", note.log_mar_base_plus_letters.round_places(2).map_err(|_| GenericError)),
+        );
+
+        assert_eq!(actual, expected, "(actual == expected)");
     }
+    Ok(())
 }
 
 #[test]
-fn test_cases_conversions() {
+fn test_cases_parsing() -> VisualAcuityResult<()> {
     let parser = Parser::new();
-    for test_case in TestCaseConversion::load() {
-        fn unwrap<T, E>(obj: &Result<Option<T>, E>, func: fn(&T) -> String) -> String {
-            match obj { Ok(Some(f)) => func(f), _ => "Error".to_string() }
-        }
+    let content = include_str!("../../../../testing/test_cases_parsing.tsv");
+    for row in TestCaseRow::read_file(content) {
+        let input: VisitInput = [
+            ("EHR Entry", row.get("EHR Entry")?),
+            ("EHR Entry Plus", row.get("EHR Entry Plus")?),
+        ].into();
 
-        fn format_float (f: &f64) -> String {
-            if f > &0.0 { format!("+{f:.2}") } else { format!("{f:.2}") }
-        }
+        let parsed = parser.parse_visit(input.clone()).unwrap();
+        let (_, note) = parsed.into_iter().next().unwrap();
+        let note = note.expect("TEST");
 
-        let input = [
-            ("EHR Entry", test_case.ehr_entry.clone()),
-            ("EHR Entry Plus", test_case.ehr_entry_plus.clone()),
-        ];
+        let expected = (
+            ("Data Quality", row.get("Data Quality")?),
+            ("Format", row.get("Format")?),
+            ("Extracted Value", row.get("Extracted Value")?),
+            ("Plus Letters", format!("[{}]", row.get("Plus Letters")?.replace('+', ""))),
+        );
 
-        let parsed = parser.parse_visit(input.into()).unwrap();
-        let note = parsed.0.get("EHR Entry").unwrap().clone();
-        let actual = TestCaseConversion {
-            line_number: test_case.line_number.clone(),
-            comment: test_case.comment.clone(),
-            ehr_entry: note.text,
-            ehr_entry_plus: note.text_plus,
-            snellen_equivalent: unwrap(&note.snellen_equivalent, |s| s.to_string()),
-            log_mar_equivalent: unwrap(&note.log_mar_base , format_float),
-            log_mar_plus_letters: unwrap(&note.log_mar_base_plus_letters , format_float),
-        };
+        let VisitNote { data_quality, va_format, extracted_value, plus_letters, .. } = note;
+        let actual = (
+            ("Data Quality", format!("{data_quality:?}")),
+            ("Format", match va_format {
+                Err(_) => s!("Error"),
+                Ok(value) => format!("{value:?}")
+            }),
+            ("Extracted Value", extracted_value),
+            ("Plus Letters", format!("{plus_letters:?}")),
+        );
 
-        assert_eq!(actual, test_case, "(actual == expected)");
+        assert_eq!(actual, expected, "{} {input:?}\n(actual ?== expected)", row.line_number);
     }
+    Ok(())
 }
-

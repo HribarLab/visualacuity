@@ -1,50 +1,59 @@
 EHR Entry	EHR Entry Plus	Data Quality	Format	Extracted Value	Plus Letters	Comment
+20 / 30		Exact	Snellen	20/30		
 20 / 30 + 1		Exact	Snellen	20/30	+1	
 20 / 30 +3 -1		Exact	Snellen	20/30	+3, -1	
 20/30-1+6		Exact	Snellen	20/30	-1, +6	
 20/30	-1+6	Exact	Snellen	20/30	-1, +6	
-text 20/30 +1 -3 text		Unrecognized	Snellen	20/30	+1, -3	
-text 20/30 text	+1 -3	Unrecognized	Snellen	20/30	+1, -3	
+20/30 soft	+1 -3	ConvertibleConfident	Snellen	20/30	+1, -3	
+barely 20/30	+1 -3	ConvertibleConfident	Snellen	20/30	+1, -3	
+1) 20/30 and maybe some text	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
+1st 20/30 and maybe some text	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
+20/30 and some unrecognized text	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
+some unrecognized text and 20/30	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
+unrecognized text 20/30 unrecognized text	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
+unrecognized text	""	NoValue	Unknown			
 20/23 (38.0 cy/cm) Card 17		Exact	Teller	Card 17		
-20/321		Exact	Unknown			
-20/312		Exact	Unknown			
+20/321		NoValue	Unknown			
+20/312		NoValue	Unknown			
 J1		Exact	Jaeger	J1		
 J1+		Exact	Jaeger	J1+		
-J0		Convertible	Jaeger	J1+		Equivalent of J1+
+J0		ConvertibleConfident	Jaeger	J1+		Equivalent of J1+
 J29		Exact	Jaeger	J29		
-J30		Exact	Unknown			Unknown value
+J30		NoValue	Unknown			Unknown value
 J4 +2		Exact	Jaeger	J4	+2	
 79 letters		Exact	ETDRS	79 letters		
-96 letters		Exact	Unknown			
-123 letters		Exact	Unknown			
+96 letters		NoValue	Unknown			
+123 letters		NoValue	Unknown			
 81ltrs		Exact	ETDRS	81 letters		
 20/20 ETDRS (83 letters)		Exact	ETDRS	83 letters		
 20/20 ETDRS 83 letters		Exact	ETDRS	83 letters		
 CF		Exact	NearTotalLoss	CF		
 HM		Exact	NearTotalLoss	HM		
+JM		NoValue	Unknown			Typo for HM?
 NLP		Exact	NearTotalLoss	NLP		
 LP		Exact	NearTotalLoss	LP		
-BTL		Convertible	NearTotalLoss	LP		
-blink to light		Convertible	NearTotalLoss	LP		
-NI		Exact	PinHole	NI		
+BTL		NoValue	VisualResponse	BTL		
+blink to light		NoValue	VisualResponse	BTL		
+wince to light		NoValue	VisualResponse	WTL		
+WTL		NoValue	VisualResponse	WTL		
 CF at 1.5ft		Exact	NearTotalLoss	CF @ 1.5 feet		
 # CF 2		Exact	Unknown			
 # CF@3		Exact	Unknown			
-CSM		Exact	Binocular	CSM		
-CSM Pref		Exact	Binocular	CSM		
-fix and follow		Exact	Binocular	FixAndFollow		
-fix & follow		Exact	Binocular	FixAndFollow		
-FF		Exact	Binocular	FixAndFollow		
-F + F		Exact	Binocular	FixAndFollow
-F&F		Exact	Binocular	FixAndFollow		
-f/f		Exact	Binocular	FixAndFollow		
-no fix & follow		Exact	Binocular	NoFixAndFollow		
-Fix, No Follow		Exact	Binocular	FixNoFollow		
-CSM, good f+f		Exact	Binocular	CSM		
-NI		Exact	PinHole	NI		
-NT		Unrecognized	NotTaken	NT		
-unable		Unrecognized	NotTaken	Unable		
-prosthesis		Unrecognized	NotTaken	Prosthesis		
-Forgot glasses today		Unrecognized	Unknown			
-CF at 8 feet to 20/400		Exact	Error	Error		Multiple matches for VA
-20/20 J5		Exact	Error	Error		Multiple matches for VA
+CSM		NoValue	VisualResponse	CSM		
+CSM Pref		NoValue	VisualResponse	CSM prefers		
+fix and follow		NoValue	VisualResponse	fix & follow		
+fix & follow		NoValue	VisualResponse	fix & follow		
+FF		NoValue	VisualResponse	fix & follow		
+F + F		NoValue	VisualResponse	fix & follow		
+F&F		NoValue	VisualResponse	fix & follow		
+f/f		NoValue	VisualResponse	fix & follow		
+no fix & follow		NoValue	VisualResponse	no fix & follow		
+Fix, No Follow		NoValue	VisualResponse	fix, no follow		
+# CSM, good f+f		NoValue	VisualResponse	CSM		Multiple values
+NI		CrossReference	Unknown	NI		If we can fill in the xref, we can update the format and extracted value
+NT		NoValue	NotTaken	NT		
+unable		NoValue	NotTaken	Unable		
+prosthesis		NoValue	NotTaken	Prosthesis		
+Forgot glasses today		NoValue	Unknown			
+CF at 8 feet to 20/400		Multiple	Error	Error		Multiple matches for VA
+20/20 J5		Multiple	Error	Error		Multiple matches for VA

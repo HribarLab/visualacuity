@@ -8,16 +8,22 @@ from visualacuity._types import (
     Correction,
     VAFormat,
     PinHole,
+    SnellenFraction,
 )
 from visualacuity._parse import (
     parse_visit,
 )
+from . import cli
 
 # Alias some enums for convenience:
 
+NO_VALUE = DataQuality.NO_VALUE
 EXACT = DataQuality.EXACT
-CONVERTIBLE = DataQuality.CONVERTIBLE
-UNRECOGNIZED = DataQuality.UNRECOGNIZED
+MULTIPLE = DataQuality.MULTIPLE
+CROSS_REFERENCE = DataQuality.CROSS_REFERENCE
+CONVERTIBLE_CONFIDENT = DataQuality.CONVERTIBLE_CONFIDENT
+CONVERTIBLE_FUZZY = DataQuality.CONVERTIBLE_FUZZY
+UNUSABLE = DataQuality.UNUSABLE
 
 OS = Laterality.OS
 OD = Laterality.OD
@@ -28,6 +34,7 @@ DISTANCE = DistanceOfMeasurement.DISTANCE
 
 CC = Correction.CC
 SC = Correction.SC
+MANIFEST = Correction.MANIFEST
 
 SNELLEN = VAFormat.SNELLEN
 JAEGER = VAFormat.JAEGER

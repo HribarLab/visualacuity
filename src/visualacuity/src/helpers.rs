@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use crate::{Visit, VisitNote};
+use crate::errors::OptionResult;
 
 pub(crate) trait RoundPlaces {
     fn round_places(&self, p: usize) -> Self;
@@ -18,6 +19,15 @@ impl<T: RoundPlaces> RoundPlaces for Option<T> {
         match self {
             Some(x) => Some(x.round_places(p)),
             None => None
+        }
+    }
+}
+
+impl<T: RoundPlaces + Clone> RoundPlaces for OptionResult<T> {
+    fn round_places(&self, p: usize) -> Self {
+        match self {
+            Self::Some(x) => Self::Some(x.round_places(p)),
+            _ => self.clone()
         }
     }
 }

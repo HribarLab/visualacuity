@@ -37,9 +37,9 @@ impl Parser {
         Ok(Self { parser })
     }
 
-    pub fn parse_visit(&self, notes: BTreeMap<&str, &str>) -> PyResult<BTreeMap<String, VisitNote>> {
+    pub fn parse_visit(&self, notes: BTreeMap<&str, &str>) -> PyResult<BTreeMap<String, Option<VisitNote>>> {
         match self.parser.parse_visit(notes.into()) {
-            Ok(result) => Ok(result.into_iter().map(|(key, v)| (key.into(), v.into())).collect()),
+            Ok(result) => Ok(result.into_iter().map(|(key, v)| (key.into(), v.map(|x| x.into()))).collect()),
             Err(e) => Err(PyValueError::new_err(format!("{:?}", e)))
         }
     }

@@ -4,20 +4,17 @@ use test_case::test_case;
 
 use crate::*;
 use crate::DistanceUnits::*;
-use crate::ParsedItem::*;
-use crate::FixationPreference::*;
 use crate::logmar::LogMarBase;
-use crate::VisualAcuityError::*;
-use crate::structure::Correction::*;
-use crate::structure::DistanceOfMeasurement::*;
-use crate::structure::Laterality::*;
-use crate::structure::*;
+use crate::Correction::*;
+use crate::DistanceOfMeasurement::*;
+use crate::Laterality::*;
 use crate::visit::*;
 use crate::visitinput::*;
-use crate::parser::*;
 use crate::snellen_equivalent::SnellenEquivalent;
+use crate::VisualAcuityError::*;
 
 lazy_static! {
+static ref KEY_PARSER: KeyParser = KeyParser::new();
 static ref PLUS_LETTERS_PARSER: PlusLettersParser = PlusLettersParser::new();
 static ref JAEGER_PARSER: JaegerExactParser = JaegerExactParser::new();
 static ref SNELLEN_PARSER: SnellenExactParser = SnellenExactParser::new();
@@ -31,14 +28,22 @@ fn parse_notes(notes: &str) -> VisualAcuityResult<Vec<ParsedItem>> {
     }
 
     let notes = notes.trim();
-    let binding = notes.to_lowercase();
-    let notes_temp = binding.as_str();
 
-    match CHART_NOTES_PARSER.parse(notes, notes_temp) {
+    match CHART_NOTES_PARSER.parse(notes) {
         Ok(Content { content: p, .. }) => Ok(p.into_iter().collect()),
-        Err(e) => Err(ParseError(format!("{e:?}: {notes_temp}")))
+        Err(e) => Err(ParseError(format!("{e:?}: {notes}")))
     }
 }
+
+#[test_case("EHR Entry", Ok(EntryMetadata::default()))]
+#[test_case("CC VA", Ok(EntryMetadata{correction: CC, ..EntryMetadata::default() }))]
+fn test_parse_key(notes: &str, expected: VisualAcuityResult<EntryMetadata>) -> VisualAcuityResult<()> {
+    let notes = notes.trim();
+    let actual = Ok(KEY_PARSER.parse(notes)?);
+    assert_eq!(actual, expected, "{notes}");
+    Ok(())
+}
+
 
 #[test]
 fn test_teller() {
@@ -98,7 +103,7 @@ fn test_ntlv(
 #[test_case("-", Err(()); "just a minus sign")]
 #[test_case("-7", Err(()))]
 fn test_plus_letters(chart_note: &str, expected: Result<ParsedItem, ()>) {
-    assert_eq!(PLUS_LETTERS_PARSER.parse(chart_note, chart_note).map_err(|_| ()), expected);
+    assert_eq!(PLUS_LETTERS_PARSER.parse(chart_note).map_err(|_| ()), expected);
 }
 
 #[test_case("20 / 30 + 1", Ok(vec ! [
@@ -143,9 +148,9 @@ fn test_jaeger(chart_note: &str, expected: VisualAcuityResult<Vec<ParsedItem>>) 
 #[test_case("HM", Ok(vec![NearTotalLoss(s!("HM"), NotProvided )]))]
 #[test_case("LP", Ok(vec![NearTotalLoss(s!("LP"), NotProvided )]))]
 #[test_case("NLP", Ok(vec![NearTotalLoss(s!("NLP"), NotProvided )]))]
-#[test_case("BTL", Ok(vec![NearTotalLoss(s!("LP"), NotProvided )]))]
-#[test_case("blink to light", Ok(vec![NearTotalLoss(s!("LP"), NotProvided )]))]
-#[test_case("NI", Ok(vec ! [PinHoleEffectItem(PinHoleEffect::NI)]))]
+#[test_case("BTL", Ok(vec![VisualResponse(s!("BTL"))]))]
+#[test_case("blink to light", Ok(vec![VisualResponse(s!("BTL"))]))]
+#[test_case("NI", Ok(vec![CrossReferenceItem(s!("NI"))]))]
 #[test_case("CF at 1.5ft", Ok(vec![NearTotalLoss(s!("CF"), Feet(1.5) )]))]
 #[test_case("CF 2'", Ok(vec![NearTotalLoss(s!("CF"), Feet(2.0) )]))]
 #[test_case("CF@3'", Ok(vec![NearTotalLoss(s!("CF"), Feet(3.0) )]))]
@@ -155,8 +160,8 @@ fn test_jaeger(chart_note: &str, expected: VisualAcuityResult<Vec<ParsedItem>>) 
 #[test_case("CF @ 2M", Ok(vec![NearTotalLoss(s!("CF"), Meters(2.0) )]))]
 #[test_case("CF @ 0.3 meters", Ok(vec![NearTotalLoss(s!("CF"), Meters(0.3) )]))]
 #[test_case("CF @ 30 cm", Ok(vec![NearTotalLoss(s!("CF"), Centimeters(30.0) )]))]
-#[test_case("No BTL", Ok(vec![NearTotalLoss(s!("NLP"), NotProvided )]))]
-#[test_case("CSM", Ok(vec ! [BinocularFixation(CSM)]))]
+#[test_case("No BTL", Ok(vec![VisualResponse(s!("no BTL"))]))]
+#[test_case("CSM", Ok(vec ! [VisualResponse(s!("CSM"))]))]
 fn test_alternative_visual_acuity(chart_note: &str, expected: Result<Vec<ParsedItem>, ()>) {
     let expected = expected.map(|e| e.into_iter().collect());
     assert_eq!(parse_notes(chart_note).map_err(|_| ()), expected, "{chart_note:?}");
@@ -226,42 +231,42 @@ fn test_whole_thing(chart_note: &'static str, expected: Result<Vec<ParsedItem>, 
 }
 
 #[test_case("fix and follow", Ok(vec ! [
-    BinocularFixation(FixAndFollow)
+    VisualResponse(s!("fix & follow"))
 ]))]
 #[test_case("fix & follow", Ok(vec ! [
-    BinocularFixation(FixAndFollow)
+    VisualResponse(s!("fix & follow"))
 ]))]
 #[test_case("FF", Ok(vec ! [
-    BinocularFixation(FixAndFollow),
+    VisualResponse(s!("fix & follow")),
 ]))]
 #[test_case("F + F", Ok(vec ! [
-    BinocularFixation(FixAndFollow),
+    VisualResponse(s!("fix & follow")),
 ]); "F + F with plus sign and spaces")]
 #[test_case("F+F", Ok(vec ! [
-    BinocularFixation(FixAndFollow),
+    VisualResponse(s!("fix & follow")),
 ]); "F + F with plus sign no spaces")]
 #[test_case("F&F", Ok(vec ! [
-    BinocularFixation(FixAndFollow),
+    VisualResponse(s!("fix & follow")),
 ]); "F + F with ampersand no spaces")]
 #[test_case("f/f", Ok(vec ! [
-    BinocularFixation(FixAndFollow),
+    VisualResponse(s!("fix & follow")),
 ]); "F + F with slash no spaces")]
 #[test_case("no fix & follow", Ok(vec ! [
-    BinocularFixation(NoFixAndFollow),
+    VisualResponse(s!("no fix & follow")),
 ]))]
 #[test_case("Fix, No Follow", Ok(vec ! [
-    BinocularFixation(FixNoFollow),
+    VisualResponse(s!("fix, no follow")),
 ]))]
 #[test_case("CSM, good f+f", Ok(vec ! [
-    BinocularFixation(CSM),
+    VisualResponse(s!("CSM")),
     Text("good".to_string()),
-    BinocularFixation(FixAndFollow),
+    VisualResponse(s!("fix & follow")),
 ]))]
 fn test_fix_and_follow(chart_note: &'static str, expected: VisualAcuityResult<Vec<ParsedItem>>) {
     assert_eq!(parse_notes(chart_note), expected, "{chart_note}");
 }
 
-#[test_case("CSM Pref", Ok(vec ! [BinocularFixation(CSM), BinocularFixation(Prefers)]))]
+#[test_case("CSM Pref", Ok(vec ! [VisualResponse(s!("CSM prefers"))]))]
 #[test_case("j1", Ok(vec![Jaeger(s!("J1"))]))]
 #[test_case("j30", Ok(vec ! [Text("j30".to_string())]))]
 #[test_case("79 letters", Ok(vec![ETDRS(s!("79 letters"))]))]
@@ -289,140 +294,61 @@ fn test_base_and_plus_letters(
     Ok(())
 }
 
-#[test_case("Both Eyes Distance CC", Ok(vec ! [
-LateralityItem(OU),
-DistanceItem(Distance),
-CorrectionItem(CC),
-]))]
+#[test_case("Both Eyes Distance CC", OU, Distance, CC, PinHole::Unknown)]
+#[test_case("Manifest Both Eyes", OU, Distance, Manifest, PinHole::Unknown)]
 fn test_visit_details(
     notes: &str,
-    expected: VisualAcuityResult<Vec<ParsedItem>>
+    laterality: Laterality,
+    distance_of_measurement: DistanceOfMeasurement,
+    correction: Correction,
+    pinhole: PinHole,
 ) -> Result<(), anyhow::Error> {
-    let parser = Parser::new();
-    let actual = parser.parse_text(notes).content;
-    let expected = expected.map(|e| e.into_iter().collect())?;
+    let expected = EntryMetadata { laterality, distance_of_measurement, correction, pinhole };
+    let actual = KEY_PARSER.parse(notes).expect("");
     assert_eq!(actual, expected);
     Ok(())
 }
 
-#[test_case("20/20", Ok(Some(0.0)))]
-#[test_case("20/15", Ok(Some(-0.1249)))]
-#[test_case("J2", Ok(Some(0.0969)))]
-#[test_case("J1", Ok(Some(0.0)))]
+#[test_case("20/20", Ok(0.0))]
+#[test_case("20/15", Ok(-0.1249))]
+#[test_case("J2", Ok(0.0969))]
+#[test_case("J1", Ok(0.0))]
 #[test_case("CF", Err(NotImplemented))]
 #[test_case("HM", Err(NotImplemented))]
 #[test_case("LP", Err(NotImplemented))]
 #[test_case("NLP", Err(NotImplemented))]
-#[test_case("5 letters", Ok(Some(1.6)))]
-#[test_case("10 letters", Ok(Some(1.5)))]
-#[test_case("15 letters", Ok(Some(1.4)))]
-#[test_case("20 letters", Ok(Some(1.3)))]
-#[test_case("25 letters", Ok(Some(1.2)))]
-#[test_case("30 letters", Ok(Some(1.1)))]
-#[test_case("35 letters", Ok(Some(1.0)))]
-#[test_case("40 letters", Ok(Some(0.9)))]
-#[test_case("45 letters", Ok(Some(0.8)))]
-#[test_case("50 letters", Ok(Some(0.7)))]
-#[test_case("55 letters", Ok(Some(0.6)))]
-#[test_case("60 letters", Ok(Some(0.5)))]
-#[test_case("65 letters", Ok(Some(0.4)))]
-#[test_case("70 letters", Ok(Some(0.3)))]
-#[test_case("75 letters", Ok(Some(0.2)))]
-#[test_case("80 letters", Ok(Some(0.1)))]
-#[test_case("85 letters", Ok(Some(0.0)))]
-#[test_case("90 letters", Ok(Some(- 0.1)))]
-#[test_case("95 letters", Ok(Some(- 0.2)))]
-#[test_case("58 letters", Ok(Some(0.5)); "TODO: treat n%5 as plus_letters?")]
+#[test_case("5 letters", Ok(1.6))]
+#[test_case("10 letters", Ok(1.5))]
+#[test_case("15 letters", Ok(1.4))]
+#[test_case("20 letters", Ok(1.3))]
+#[test_case("25 letters", Ok(1.2))]
+#[test_case("30 letters", Ok(1.1))]
+#[test_case("35 letters", Ok(1.0))]
+#[test_case("40 letters", Ok(0.9))]
+#[test_case("45 letters", Ok(0.8))]
+#[test_case("50 letters", Ok(0.7))]
+#[test_case("55 letters", Ok(0.6))]
+#[test_case("60 letters", Ok(0.5))]
+#[test_case("65 letters", Ok(0.4))]
+#[test_case("70 letters", Ok(0.3))]
+#[test_case("75 letters", Ok(0.2))]
+#[test_case("80 letters", Ok(0.1))]
+#[test_case("85 letters", Ok(0.0))]
+#[test_case("90 letters", Ok(-0.1))]
+#[test_case("95 letters", Ok(-0.2))]
+#[test_case("58 letters", Ok(0.5); "TODO: treat n%5 as plus_letters?")]
 fn test_log_mar_base(
     notes: &str,
-    expected: VisualAcuityResult<Option<f64>>
+    expected: VisualAcuityResult<f64>
 ) -> Result<(), anyhow::Error> {
+    let expected: OptionResult<_> = expected.into();
     let parser = Parser::new();
     let visit_notes = [("fieldname", notes)].into();
     let parsed_notes = parser.parse_visit(visit_notes);
-    let base_item = parsed_notes?.into_iter().map(|(_, v)| v).next().expect("");
+    let base_item = parsed_notes?.into_iter().map(|(_, v)| v).next().expect("").expect("");
+
     assert_almost_eq!(base_item.log_mar_base, expected, 4, "\"{notes}\"");
     Ok(())
-}
-
-#[test_case(
-    [
-        ("Both Eyes Distance CC", "20/20"),
-        ("Both Eyes Distance CC +/-", "-2"),
-    ],
-    Ok([
-        (("Both Eyes Distance CC".to_string()), VisitNote {
-            text: "20/20".to_string(),
-            text_plus: "-2".to_string(),
-            data_quality: DataQuality::Exact,
-            laterality: Laterality::OU,
-            distance_of_measurement: DistanceOfMeasurement::Distance,
-            correction: Correction::CC,
-            pinhole: PinHole::Unknown,
-            va_format: VAFormat::Snellen,
-            extracted_value: format ! ("20/20"),
-            plus_letters: vec ! [- 2],
-            snellen_equivalent: Ok(Some((20, 20).into())),
-            log_mar_base: Ok(Some(0.0)),
-            log_mar_base_plus_letters: Ok(Some(0.0323)),
-        }),
-    ])
-)]
-#[test_case(
-    [
-        ("Visual Acuity Right Eye Distance CC", "20/100-1+2 ETDRS  (sc eccentric fixation)"),
-    ],
-    Ok([
-        ("Visual Acuity Right Eye Distance CC".to_string(), VisitNote {
-            text: "20/100-1+2 ETDRS  (sc eccentric fixation)".to_string(),
-            text_plus: "".to_string(),
-            data_quality: DataQuality::Exact,
-            laterality: Laterality::OD,
-            distance_of_measurement: DistanceOfMeasurement::Distance,
-            correction: Correction::Error(MultipleValues(format ! ("[CC, SC]"))),
-            pinhole: PinHole::Unknown,
-            va_format: VAFormat::Snellen,
-            extracted_value: format ! ("20/100"),
-            plus_letters: vec ! [- 1, 2],
-            snellen_equivalent: Ok(Some((20, 100).into())),
-            log_mar_base: Ok(Some(0.6990)),
-            log_mar_base_plus_letters: Ok(Some(0.6828)),
-        })
-    ])
-    ; "Handling ambiguous VAFormats"
-)]
-#[test_case(
-    [
-        ("Visual Acuity Right Eye Distance CC", "20/20 J5"),
-    ],
-    Ok([
-        ("Visual Acuity Right Eye Distance CC".to_string(), VisitNote {
-            text: "20/20 J5".to_string(),
-            text_plus: "".to_string(),
-            data_quality: DataQuality::Exact,
-            laterality: Laterality::OD,
-            distance_of_measurement: DistanceOfMeasurement::Distance,
-            correction: Correction::CC,
-            pinhole: PinHole::Unknown,
-            va_format: VAFormat::Error(MultipleValues(format ! ("[Snellen, Jaeger]"))),
-            extracted_value: format ! ("Error"),
-            plus_letters: vec ! [],
-            snellen_equivalent: Err(MultipleValues(format!("[20/20, J5]"))),
-            log_mar_base: Err(MultipleValues(format!("[20/20, J5]"))),
-            log_mar_base_plus_letters: Err(MultipleValues(format!("[20/20, J5]"))),
-        })
-    ])
-    ; "Handling ambiguous Correction values"
-)]
-fn test_visit<'a, I, E>(
-    visit_notes: I,
-    expected: VisualAcuityResult<E>
-) where I: Into<VisitInput>, E: Into<BTreeMap<String, VisitNote>> {
-    let expected = expected.map(|v| Visit(v.into()));
-    let parser = Parser::new();
-    let visit_notes = visit_notes.into();
-    let actual = parser.parse_visit(visit_notes.clone());
-    assert_almost_eq!(actual, expected, 4, "{visit_notes:?}");
 }
 
 #[test_case(
@@ -456,42 +382,42 @@ fn test_extracted_value<T: Into<VisitInput>>(visit_notes: T, expected: VisualAcu
     let actual = parser.parse_visit(visit_notes.clone())
         .map(|visit| {
             visit.into_iter()
-                .map(|(key, note)| (key, note.extracted_value))
+                .map(|(key, note)| (key, note.expect("TEST").extracted_value))
                 .into()
         });
     assert_eq!(actual, expected, "{visit_notes:?}")
 }
 
-#[test_case("20/20", Ok(Some((20, 20))))]
-#[test_case("20/15", Ok(Some((20, 15))))]
-#[test_case("J1", Ok(Some((20, 20))))]
-#[test_case("J2", Ok(Some((20, 25))))]
-#[test_case("70 letters", Ok(Some((20, 40))))]
-#[test_case("58 letters", Ok(Some((20, 63))))]
-#[test_case("10 letters", Ok(Some((20, 640))))]
+#[test_case("20/20", Ok((20, 20)))]
+#[test_case("20/15", Ok((20, 15)))]
+#[test_case("J1", Ok((20, 20)))]
+#[test_case("J2", Ok((20, 25)))]
+#[test_case("70 letters", Ok((20, 40)))]
+#[test_case("58 letters", Ok((20, 63)))]
+#[test_case("10 letters", Ok((20, 640)))]
 #[test_case("CF", Err(NoSnellenEquivalent("CF".to_string())))]
 #[test_case("HM", Err(NoSnellenEquivalent("HM".to_string())))]
 #[test_case("LP", Err(NoSnellenEquivalent("LP".to_string())))]
 #[test_case("NLP", Err(NoSnellenEquivalent("NLP".to_string())))]
-#[test_case("CF at 20 feet", Ok(Some((20, 73))))]   // Schulze-Bonsel et al. (2006)
-#[test_case("CF at 2 feet", Ok(Some((20, 738))))]   // Schulze-Bonsel et al. (2006)
-#[test_case("CF at 30cm", Ok(Some((20, 1500))))]    // Schulze-Bonsel et al. (2006)
-#[test_case("HM at 20 feet", Ok(Some((20, 196))))]  // Schulze-Bonsel et al. (2006)
-#[test_case("HM at 2 feet", Ok(Some((20, 1968))))]  // Schulze-Bonsel et al. (2006)
-#[test_case("HM at 30cm", Ok(Some((20, 4000))))]    // Schulze-Bonsel et al. (2006)
+#[test_case("CF at 20 feet", Ok((20, 73)))]   // Schulze-Bonsel et al. (2006)
+#[test_case("CF at 2 feet", Ok((20, 738)))]   // Schulze-Bonsel et al. (2006)
+#[test_case("CF at 30cm", Ok((20, 1500)))]    // Schulze-Bonsel et al. (2006)
+#[test_case("HM at 20 feet", Ok((20, 196)))]  // Schulze-Bonsel et al. (2006)
+#[test_case("HM at 2 feet", Ok((20, 1968)))]  // Schulze-Bonsel et al. (2006)
+#[test_case("HM at 30cm", Ok((20, 4000)))]    // Schulze-Bonsel et al. (2006)
 #[test_case("CF at 8 feet to 20/400", Err(MultipleValues(format ! (""))))]
 fn test_visit_snellen_equivalents(
     text: &str,
-    expected: VisualAcuityResult<Option<(u16, u16)>>
+    expected: VisualAcuityResult<(u16, u16)>
 ) -> Result<(), anyhow::Error> {
-    let expected = expected.map(|e| e.map(Into::into));
+    let expected = expected.map(|e| Fraction::from(e)).into();
     let parser = Parser::new();
     let visit_notes = BTreeMap::from([("", text)]);
     let parsed = parser.parse_visit(visit_notes.into())
         .map(|visit| {
             visit.into_iter()
-                .map(|(key, note)| match (key, note.snellen_equivalent) {
-                    (k, Err(MultipleValues(_))) => (k, Err(MultipleValues(format!("")))),
+                .map(|(key, note)| match (key, note.expect("TEST").snellen_equivalent) {
+                    (k, OptionResult::Err(MultipleValues(_))) => (k, OptionResult::Err(MultipleValues(format!("")))),
                     (k, v) => (k, v)
                 })
                 .collect::<HashMap<_, _>>()
@@ -504,21 +430,21 @@ fn test_visit_snellen_equivalents(
 
 #[test_case(
     vec ! [("", "20/20 ETDRS 83 letters")],
-    Ok(HashMap::from([("", VAFormat::ETDRS)]))
+    Ok(HashMap::from([("", Ok(VAFormat::ETDRS))]))
 )]
 #[test_case(
     vec ! [("", "CF at 8 feet to 20/400")],
-    Ok(HashMap::from([("", VAFormat::Error(MultipleValues(format ! ("[NearTotalLoss, Snellen]"))))]))
+    Ok(HashMap::from([("", Err(MultipleValues(format ! ("[NearTotalLoss, Snellen]"))))]))
 )]
 fn test_va_format(
     visit_notes: Vec<(&str, &str)>,
-    expected: VisualAcuityResult<HashMap<&str, VAFormat>>
+    expected: VisualAcuityResult<HashMap<&str, VisualAcuityResult<VAFormat>>>
 ) {
     let parser = Parser::new();
     let actual = parser.parse_visit(visit_notes.into())
         .map(|visit| {
             visit.into_iter()
-                .map(|(key, note)| (key, note.va_format))
+                .map(|(key, note)| (key, note.expect("TEST").va_format))
                 .collect()
         });
     let expected = expected.map(|exp| exp.into_iter()

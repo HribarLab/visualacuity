@@ -72,10 +72,10 @@ def _load_file(filename) -> List[Dict[str, str]]:
                 "EHR Entry": VisitNote(
                     text=row["EHR Entry"],
                     text_plus=row["EHR Entry Plus"],
-                    data_quality=DataQuality[row.get("Data Quality", "UNRECOGNIZED").upper()],
+                    data_quality=DataQuality(row.get("Data Quality", "NoValue")),
                     plus_letters=row.get("Plus Letters", []) or [],
                     extracted_value=row.get("Extracted Value", "") or "",
-                    va_format=VAFormat(row.get("Format", "Unknown")),
+                    va_format=row.get("Format", "Unknown"),
                     snellen_equivalent=row.get("Snellen Equivalent", ""),
                     log_mar_base=row.get("LogMAR Equivalent", ""),
                     log_mar_base_plus_letters=row.get("LogMAR Plus Letters", ""),

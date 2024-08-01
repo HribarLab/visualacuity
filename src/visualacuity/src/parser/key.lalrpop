@@ -1,0 +1,62 @@
+use std::collections::HashSet;
+
+use crate::*;
+use crate::ParsedItem::*;
+use crate::DistanceOfMeasurement::*;
+use crate::Laterality::*;
+use crate::Correction::*;
+use crate::DistanceOfMeasurement::*;
+
+use lalrpop_util::ParseError::*;
+
+// The `orig` argument is added to support case-insensitive parsing. In practice, we parse on a lowercased version of
+// the input text, while retaining the original in `orig`.
+grammar(orig: &'input str);
+
+// Entry metadata from column names / keys
+pub(crate) Key: EntryMetadata = {
+    <key:Key?> <item:Item> => key.unwrap_or_default().with(item),
+    ! => EntryMetadata::default()
+};
+
+Item: ParsedItem = {
+    Distance => DistanceItem(<>),
+    Laterality => LateralityItem(<>),
+    Correction => CorrectionItem(<>),
+    PinHole => PinHoleItem(<>),
+    OtherTextUnknown => Text(<>.to_string())
+};
+
+Distance: DistanceOfMeasurement = {
+    "near" => Near,
+    "distance" => Distance,
+};
+
+Laterality: Laterality = {
+    "os" =>  OS,
+    "od" => OD,
+    "ou" => OU,
+    "left" "eye" =>  OS,
+    "right" "eye" => OD,
+    "both" "eyes" => OU,
+};
+
+Correction: Correction = {
+    "sc" => SC,
+    "cc" => CC,
+    "manifest" => Manifest
+};
+
+PinHole: PinHole = {
+    "pin" "hole" => PinHole::With,
+    "pinhole" => PinHole::With,
+    "ph" => PinHole::With,
+};
+
+OtherTextUnknown = { r#"[^ \t\n\f,()]+"# };
+
+match {
+    r#"[ \t\n\f,()]"# => {}, // Discard spaces and non-token symbols
+} else {
+    _ // catch-all
+}

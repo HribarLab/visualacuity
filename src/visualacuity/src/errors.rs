@@ -4,6 +4,7 @@ use itertools::ExactlyOneError;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VisualAcuityError {
+    GenericError,
     ParseError(String),
     UnknownError(String),
     Unreachable,
@@ -20,6 +21,14 @@ pub enum VisualAcuityError {
     ExtractNumbersError(String),
     ChartNotFound(String),
     ChartRowNotFound(String),
+}
+
+impl<L, T, E> From<lalrpop_util::ParseError<L, T, E>> for VisualAcuityError
+    where L: Debug, T: Debug, E: Debug
+{
+    fn from(value: lalrpop_util::ParseError<L, T, E>) -> Self {
+        VisualAcuityError::ParseError(format!("{value:?}"))
+    }
 }
 
 impl From<ParseIntError> for VisualAcuityError {
@@ -78,5 +87,54 @@ impl Display for VisualAcuityError {
             VisualAcuityError::ParseError(e) => write!(f, "{}", e),
             _ => write!(f, "{self:?}"),
         }
+    }
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum OptionResult<T> {
+    None,
+    Some(T),
+    Err(VisualAcuityError)
+}
+
+impl<T> OptionResult<T> {
+    pub fn map<M, F: Fn(T) -> M>(self, f: F) -> OptionResult<M> {
+        self.then(|v| OptionResult::Some(f(v)))
+    }
+
+    pub fn map_err<F: Fn(VisualAcuityError) -> VisualAcuityError>(self, f: F) -> Self {
+        match self { Self::Err(e) => Self::Err(f(e)), _ => self }
+    }
+
+    pub fn then<M, F: Fn(T) -> R, R: Into<OptionResult<M>>>(self, f: F) -> OptionResult<M> {
+        match self {
+            Self::Some(v) => f(v).into(),
+            Self::None => OptionResult::None,
+            Self::Err(e) => OptionResult::Err(e)
+        }
+    }
+}
+
+impl<T> Default for OptionResult<T> {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl<T, V: Into<T>> From<Option<V>> for OptionResult<T> {
+    fn from(value: Option<V>) -> Self {
+        match value { None => Self::None, Some(v) => Self::Some(v.into()) }
+    }
+}
+
+impl<T, E: Into<VisualAcuityError>> From<Result<T, E>> for OptionResult<T> {
+    fn from(value: Result<T, E>) -> Self {
+        match value { Ok(v) => Self::Some(v), Err(e) => Self::Err(e.into()) }
+    }
+}
+
+impl<T, E: Into<VisualAcuityError>> From<Result<Option<T>, E>> for OptionResult<T> {
+    fn from(value: Result<Option<T>, E>) -> Self {
+        value.map(|v| v).into()
     }
 }
