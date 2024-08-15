@@ -87,3 +87,12 @@ assert parsed == {
 }
 
 ```
+
+## Contributing
+
+### How to publish to PyPi
+
+1. Bump version in [src/visualacuity-python/Cargo.toml](src/visualacuity-python/Cargo.toml)
+2. Commit that file and all other changes to `main`
+3. Create a tag for this commit reflecting the new version, e.g.: `git tag "python-0.1.0a5"`
+4. Push `main` branch to github
