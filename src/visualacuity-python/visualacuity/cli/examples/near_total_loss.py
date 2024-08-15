@@ -1,3 +1,4 @@
+import os
 from argparse import ArgumentParser
 
 from visualacuity import Visit, DISTANCE, CC, NEAR_TOTAL_LOSS
@@ -20,6 +21,7 @@ def main(filenames, out_file, *, processes=None):
     loader = VisualAcuityVisitStatsLoader(processes=processes)
     counts = loader.read_csv(*filenames)
     stats = format_stats(counts)
+    os.makedirs(os.path.dirname(os.path.abspath(out_file)), exist_ok=True)
     stats.to_csv(out_file)
 
 
@@ -63,9 +65,3 @@ class VisualAcuityVisitStatsLoader(MapReduceLoader[TabularCounter, TabularCounte
             accum = TabularCounter(index_name="Field", columns=self.COLUMNS)
         accum.update(mapped)
         return accum
-
-    def callback(self, line_num: int, total_lines: int, mapped: TabularCounter, accum: TabularCounter):
-        super().callback(line_num, total_lines, mapped, accum)
-        if line_num % 100000 == 0:
-            stats = format_stats(accum)
-            stats.to_csv("examples/near_total_loss_temp.csv")

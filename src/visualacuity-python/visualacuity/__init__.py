@@ -13,7 +13,6 @@ from visualacuity._types import (
 from visualacuity._parse import (
     parse_visit,
 )
-from . import cli
 
 # Alias some enums for convenience:
 
@@ -41,3 +40,4 @@ JAEGER = VAFormat.JAEGER
 ETDRS = VAFormat.ETDRS
 TELLER = VAFormat.TELLER
 NEAR_TOTAL_LOSS = VAFormat.NEAR_TOTAL_LOSS
+

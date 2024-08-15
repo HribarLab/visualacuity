@@ -1,17 +1,15 @@
-import logging
 from argparse import ArgumentParser
 from enum import Enum
-from functools import cache
+from functools import lru_cache
 from numbers import Number
 
 import pandas
 import sys
 
 import visualacuity
-from visualacuity.cli._map_reduce import MapReduceLoader
 from visualacuity import Visit, VisitNote, DataQuality
 from visualacuity._enum_helpers import _OrderedEnumMixIn
-from visualacuity.cli import as_main, TabularCounter
+from visualacuity.cli import as_main, TabularCounter, MapReduceLoader
 
 MAX_LOGMAR = 2.0
 
@@ -156,7 +154,7 @@ class VisualAcuityBin(_OrderedEnumMixIn, Enum):
         return cls.OTHER
 
     @classmethod
-    @cache
+    @lru_cache(maxsize=None)
     def _by_logmar(cls):
         return {x.value[0]: x for x in cls}
 
