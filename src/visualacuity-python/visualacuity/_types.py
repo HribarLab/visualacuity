@@ -5,10 +5,10 @@ from functools import cache
 from numbers import Number
 from typing import List, Optional, Dict, NamedTuple
 
-from visualacuity._enum_helpers import _ConciseEnumRepr, _OrderedEnumMixIn
+from visualacuity._enum_helpers import _FancyEnumMixIn, _OrderedEnumMixIn
 
 
-class DataQuality(_OrderedEnumMixIn, _ConciseEnumRepr, Enum):
+class DataQuality(_OrderedEnumMixIn, _FancyEnumMixIn, Enum):
     NO_VALUE = "NoValue"
     EXACT = "Exact"
     MULTIPLE = "Multiple"
@@ -18,27 +18,27 @@ class DataQuality(_OrderedEnumMixIn, _ConciseEnumRepr, Enum):
     UNUSABLE = "Unusable"
 
 
-class Laterality(_ConciseEnumRepr, Enum):
+class Laterality(_FancyEnumMixIn, Enum):
     UNKNOWN = "Unknown"
     OS = "OS"
     OD = "OD"
     OU = "OU"
 
 
-class DistanceOfMeasurement(_ConciseEnumRepr, Enum):
+class DistanceOfMeasurement(_FancyEnumMixIn, Enum):
     UNKNOWN = "Unknown"
     NEAR = "Near"
     DISTANCE = "Distance"
 
 
-class Correction(_ConciseEnumRepr, Enum):
+class Correction(_FancyEnumMixIn, Enum):
     UNKNOWN = "Unknown"
     CC = "CC"
     SC = "SC"
-    MANIFEST = "MANIFEST"
+    MANIFEST = "Manifest"
 
 
-class VAFormat(_ConciseEnumRepr, Enum):
+class VAFormat(_FancyEnumMixIn, Enum):
     UNKNOWN = "Unknown"
     SNELLEN = "Snellen"
     JAEGER = "Jaeger"
@@ -49,9 +49,10 @@ class VAFormat(_ConciseEnumRepr, Enum):
     PIN_HOLE = "PinHole"
     BINOCULAR = "Binocular"
     NOT_TAKEN = "NotTaken"
+    CROSS_REFERENCE = "CrossReference"
 
 
-class PinHole(_ConciseEnumRepr, Enum):
+class PinHole(_FancyEnumMixIn, Enum):
     UNKNOWN = "Unknown"
     WITH = "With"
     WITHOUT = "Without"
@@ -87,16 +88,35 @@ class VisitNote:
     log_mar_base: Optional[float] = None
     log_mar_base_plus_letters: Optional[float] = None
 
+    @classmethod
+    def build(cls, *args, **kwargs):
+        if not args or kwargs:
+            return cls(*args, **kwargs)  # force an error
+        if args:
+            kwargs.update(zip(cls.fields(), args))
+        casts = {
+            "data_quality": lambda value: DataQuality.get(value),
+            "laterality": lambda value: Laterality.get(value, Laterality.UNKNOWN),
+            "distance_of_measurement": lambda value: DistanceOfMeasurement.get(value, DistanceOfMeasurement.UNKNOWN),
+            "correction": lambda value: Correction.get(value, Correction.UNKNOWN),
+            "pinhole": lambda value: PinHole.get(value, PinHole.UNKNOWN),
+            "va_format": lambda value: VAFormat.get(value, VAFormat.UNKNOWN),
+        }
+        for field, cast in casts.items():
+            if field in kwargs:
+                kwargs[field] = cast(kwargs[field])
+        return cls(**kwargs)
+
     def __iter__(self):
         return (getattr(self, field.name) for field in dataclasses.fields(self))
 
     def raise_errors(self):
         errors = [
             attr for attr in (self.laterality, self.distance_of_measurement, self.correction, self.va_format, self.pinhole)
-            if attr.name == "ERROR"
+            if getattr(attr, "name", attr).upper() == "ERROR"
         ]
         if any(errors):
-            raise ValueError(f"Notes had errors: {tuple(e.value for e in errors)}")
+            raise ValueError(f"Notes had errors: {tuple(getattr(e, 'value', e) for e in errors)}")
 
     @classmethod
     @cache

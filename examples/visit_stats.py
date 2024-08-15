@@ -1,74 +1,96 @@
-import logging
 from argparse import ArgumentParser
-
-import pandas
+from numbers import Number
 
 import visualacuity
-from examples.map_reduce import MapReduceLoader
-from visualacuity import Visit, Laterality
-from visualacuity.cli import as_main
-
-MAX_LOGMAR = 2.0
+from visualacuity import Visit, Laterality, VAFormat
+from visualacuity.cli import as_main, TabularCounter,  MapReduceLoader
 
 ARGS = ArgumentParser()
-ARGS.add_argument("filenames", nargs="+")
-ARGS.add_argument("out_file")
+ARGS.add_argument(
+    "filenames", nargs="+", help="Path(s) to the input file(s)"
+)
+ARGS.add_argument(
+    "out_file", help="Path to save the output file."
+)
+ARGS.add_argument(
+    "--processes", type=int, default=None, help="The number of processes to use for parallel execution."
+)
 
 
 @as_main(ARGS)
-def main(filenames, out_file):
-    loader = VisualAcuityVisitStatsLoader()
-    distribution = loader.read_csv(*filenames)
-    distribution.to_csv(out_file)
+def main(filenames, out_file, *, processes=None):
+    loader = VisualAcuityVisitStatsLoader(processes=processes)
+    counts = loader.read_csv(*filenames)
+    stats = format_stats(counts)
+    stats.to_csv(out_file)
 
 
-def n_lines(filename):
-    with open(filename, "rbU") as f:
-        for total, _ in enumerate(f):
-            pass
-        return total
+def format_stats(counts: TabularCounter):
+    n = counts["Any", "N"]
+    counts = counts.to_dataframe()
+    stats = counts.map(lambda x: f"{x:,} ({100 * x / n:.1f}%)" if x and n else "0")
+    stats["N"] = [f"{n:,}" for n in counts["N"]]
+    stats["Pin Hole NI"] = [
+        f"{ph_ni:,}/{ph:,} ({100 * ph_ni / ph:.1f}%)" if ph else "0"
+        for ph, ph_ni in zip(counts["Pin Hole"], counts["Pin Hole NI"])
+    ]
+    return stats
 
 
-class VisualAcuityVisitStatsLoader(MapReduceLoader[pandas.DataFrame, pandas.DataFrame]):
-    def map(self, visit: Visit) -> pandas.DataFrame:
-        lateralities = [l.name for l in Laterality] + ["OS && OD", "(OS && OD) || OU"]
-        result = {
-            lat: {"n": 1, "VA": 0, "Distance": 0, "Near": 0, "Manifest": 0, "Pin Hole": 0, "Pin Hole NI": 0}
-            for lat in lateralities
-        }
+class VisualAcuityVisitStatsLoader(MapReduceLoader[TabularCounter, TabularCounter]):
+    LATERALITIES = [*(l.name for l in Laterality if l != Laterality.UNKNOWN), "Any"]
+    FIELDS = ["N", "Has Text", "Recognized Format", "LogMAR Equivalent", "Distance", "Near", "Manifest", "Pin Hole", "Pin Hole NI"]
+
+    def map(self, visit: Visit) -> TabularCounter:
+        counts = TabularCounter()
         for key, entry in visit.items():
             if entry is not None:
-                if entry.laterality == Laterality.ERROR:
-                    logging.warning(entry)
+                lat = entry.laterality.name
 
-                lat_result = result[entry.laterality.name]
-                lat_result["VA"] = 1
-                if entry.distance_of_measurement == visualacuity.DISTANCE:
-                    lat_result["Distance"] = 1
-                if entry.distance_of_measurement == visualacuity.NEAR:
-                    lat_result["Near"] = 1
-                if entry.correction == visualacuity.MANIFEST:
-                    lat_result["Manifest"] = 1
-                if entry.pinhole == visualacuity.PinHole.WITH:
-                    lat_result["Pin Hole"] = 1
-                    if entry.extracted_value == "NI":  # pretty brittle
-                        lat_result["Pin Hole NI"] = 1
+                counts[lat, "Has Text"] = 1
+                counts["Any", "Has Text"] = 1
 
-        result = pandas.DataFrame(result, dtype="bool").rename_axis("Laterality", axis=1).transpose()
-        result.loc["OS && OD"] = result.loc["OS"] & result.loc["OD"]
-        result.loc["(OS && OD) || OU"] = result.loc["OS && OD"] | result.loc["OU"]
-        return result
+                if entry.va_format == VAFormat.UNKNOWN:
+                    continue
+                else:
+                    counts[lat, "Recognized Format"] = 1
+                    counts["Any", "Recognized Format"] = 1
+                    if isinstance(entry.log_mar_base, Number) and entry.log_mar_base * 0 == 0:
+                        counts[lat, "LogMAR Equivalent"] = 1
+                        counts["Any", "LogMAR Equivalent"] = 1
+                    if entry.distance_of_measurement == visualacuity.DISTANCE:
+                        counts[lat, "Distance"] = 1
+                        counts["Any", "Distance"] = 1
+                    if entry.distance_of_measurement == visualacuity.NEAR:
+                        counts[lat, "Near"] = 1
+                        counts["Any", "Near"] = 1
+                    if entry.correction == visualacuity.MANIFEST:
+                        counts[lat, "Manifest"] = 1
+                        counts["Any", "Manifest"] = 1
+                    if entry.pinhole == visualacuity.PinHole.WITH:
+                        counts[lat, "Pin Hole"] = 1
+                        counts["Any", "Pin Hole"] = 1
+                        if entry.extracted_value == "NI":  # pretty brittle
+                            counts[lat, "Pin Hole NI"] = 1
+                            counts["Any", "Pin Hole NI"] = 1
+        for lat in self.LATERALITIES:
+            counts[lat, "N"] = 1
+            # if not counts[lat, "Any VA"]:
+            #     counts[lat, "No VA"] = 1
+        return counts
 
-    def reduce(self, accum: pandas.DataFrame, mapped: pandas.DataFrame) -> pandas.DataFrame:
-        mapped = mapped.astype("int")
+    def reduce(self, accum: TabularCounter, mapped: TabularCounter) -> TabularCounter:
         if accum is None:
-            return mapped
-        accum += mapped
+            accum = TabularCounter(
+                index_name="Laterality",
+                rows=self.LATERALITIES,
+                columns=self.FIELDS
+            )
+        accum.update(mapped)
         return accum
 
-    def callback(self, line_num: int, total_lines: int, mapped: TMap, accum: TReduce):
+    def callback(self, line_num: int, total_lines: int, mapped: TabularCounter, accum: TabularCounter):
         super().callback(line_num, total_lines, mapped, accum)
-        if line_num % 1000 == 0:
-            accum.to_csv("examples/visit_stats_temp.csv")
-
-
+        if line_num % 100000 == 0:
+            stats = format_stats(accum)
+            stats.to_csv("examples/visit_stats_temp.csv")

@@ -8,40 +8,53 @@ import pandas
 import sys
 
 import visualacuity
-from examples.map_reduce import MapReduceLoader
+from visualacuity.cli._map_reduce import MapReduceLoader
 from visualacuity import Visit, VisitNote, DataQuality
 from visualacuity._enum_helpers import _OrderedEnumMixIn
-from visualacuity.cli import as_main
+from visualacuity.cli import as_main, TabularCounter
 
 MAX_LOGMAR = 2.0
 
 ARGS = ArgumentParser()
-ARGS.add_argument("filenames", nargs="+")
-ARGS.add_argument("out_file")
+ARGS.add_argument(
+    "filenames", nargs="+", help="Path(s) to the input file(s)"
+)
+ARGS.add_argument(
+    "out_file", help="Path to save the output file."
+)
+ARGS.add_argument(
+    "--processes", type=int, default=None, help="The number of processes to use for parallel execution."
+)
 
 
 @as_main(ARGS)
-def main(filenames, out_file):
-    loader = VisualAcuityVisitStatsLoader()
+def main(filenames, out_file, *, processes=None):
+    loader = VisualAcuityDistributionLoader(processes=processes)
     distribution = loader.read_csv(*filenames)
-    distribution.to_csv(out_file)
-    draw_histogram(distribution, out_file + ".pdf")
+    df = distribution.to_dataframe()
+    df.to_csv(out_file)
+    draw_histogram(df, out_file + ".pdf")
 
 
-class VisualAcuityVisitStatsLoader(MapReduceLoader[pandas.DataFrame, pandas.DataFrame]):
-    def map(self, visit: Visit) -> pandas.DataFrame:
-        data = [
-            [VisualAcuityBin.get(entry), entry.data_quality.value, 1]
-            for key, entry in visit.items()
-            if entry is not None
-        ]
-        return pandas.DataFrame(data, columns=["Index", "Data Quality", "Count"])
+class VisualAcuityDistributionLoader(MapReduceLoader[TabularCounter, TabularCounter]):
+    def map(self, visit: Visit) -> TabularCounter:
+        counts = TabularCounter()
+        for key, entry in visit.items():
+            if entry is not None:
+                va_bin = VisualAcuityBin.get(entry)
+                dq = entry.data_quality.value
+                counts[va_bin, dq] += 1
+        return counts
 
-    def reduce(self, accum: pandas.DataFrame, mapped: pandas.DataFrame) -> pandas.DataFrame:
+    def reduce(self, accum: TabularCounter, mapped: TabularCounter) -> TabularCounter:
         if accum is None:
-            accum = pandas.DataFrame(index=self.index(), columns=self.columns()).fillna(0).astype("int")
-        pivoted = mapped.pivot_table(index="Index", columns="Data Quality", aggfunc="count").droplevel(level=0, axis=1)
-        return pandas.concat([accum, pivoted]).groupby(level=0).sum().astype("int")
+            accum = TabularCounter(
+                index_name="VA",
+                rows=self.index(),
+                columns=self.columns(),
+            )
+        accum.update(mapped)
+        return accum
 
     def columns(self):
         columns = [
@@ -52,13 +65,14 @@ class VisualAcuityVisitStatsLoader(MapReduceLoader[pandas.DataFrame, pandas.Data
         return columns + [c.value for c in DataQuality if c.value not in columns]
 
     def index(self):
-        return list(VisualAcuityBin)
+        return list(VisualAcuityBin)[1:]
 
     def callback(self, line_num: int, total_lines: int, mapped: pandas.DataFrame, accum: pandas.DataFrame):
         super().callback(line_num, total_lines, mapped, accum)
         if line_num % 100000 == 0:
-            accum.to_csv("examples/distribution_temp.csv")
-            draw_histogram(accum, "examples/distribution_temp.pdf")
+            df = accum.to_dataframe()
+            df.to_csv("examples/distribution_temp.csv")
+            draw_histogram(df, "examples/distribution_temp.pdf")
 
 
 def draw_histogram(stacked: pandas.DataFrame, out_file):
@@ -75,7 +89,6 @@ def draw_histogram(stacked: pandas.DataFrame, out_file):
     plt.tight_layout()
     plt.savefig(out_file, format="pdf", bbox_inches="tight")
     plt.close()
-    # logging.warning(f"Wrote file: {out_file}")
 
 
 class VisualAcuityBin(_OrderedEnumMixIn, Enum):
@@ -110,9 +123,9 @@ class VisualAcuityBin(_OrderedEnumMixIn, Enum):
     LP = (5.00, "LP")
     NLP = (6.00, "NLP")
     NEAR = (sys.maxsize, "Near VA")
-    NI = (sys.maxsize, "NI")
-    VISUAL_RESPONSE = (sys.maxsize, "Visual Response")
-    UNUSABLE = (sys.maxsize, "Unusable")
+    # NI = (sys.maxsize, "NI")
+    # VISUAL_RESPONSE = (sys.maxsize, "Visual Response")
+    OTHER = (sys.maxsize, "Other")
 
     @classmethod
     def get(cls, entry: VisitNote):
@@ -123,7 +136,8 @@ class VisualAcuityBin(_OrderedEnumMixIn, Enum):
         if entry.distance_of_measurement == visualacuity.NEAR:
             return cls.NEAR
         if entry.va_format == visualacuity.VAFormat.VISUAL_RESPONSE:
-            return cls.VISUAL_RESPONSE
+            # return cls.VISUAL_RESPONSE
+            return cls.OTHER
         if (
                 entry.data_quality == DataQuality.CROSS_REFERENCE
                 or entry.va_format == visualacuity.VAFormat.NEAR_TOTAL_LOSS
@@ -132,25 +146,14 @@ class VisualAcuityBin(_OrderedEnumMixIn, Enum):
                 bin_key, *_ = entry.extracted_value.split()
                 return cls[bin_key]
             except:
-                text = f"{entry.text} {entry.text_plus}".strip()
-                logging.warning(f"Unhandled value: \"{text.strip()}\"")
-                return cls.UNUSABLE
+                return cls.OTHER
 
         bin_key = entry.log_mar_base
         if isinstance(bin_key, Number):
             bin_key = min(round(bin_key or 0.0, 1), cls.MAX.value[0])
-            if entry.data_quality == DataQuality.CONVERTIBLE_FUZZY:
-                # print(entry)
-                pass
-
             return cls._by_logmar()[bin_key]
 
-        if entry.data_quality in (DataQuality.NO_VALUE, DataQuality.MULTIPLE,):
-            return cls.UNUSABLE
-        text = f"{entry.text} {entry.text_plus}".strip()
-        logging.warning(f"Unhandled value: \"{text.strip()}\"")
-        logging.warning(f"{entry}")
-        return cls.UNUSABLE
+        return cls.OTHER
 
     @classmethod
     @cache
