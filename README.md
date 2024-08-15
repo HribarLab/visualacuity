@@ -93,7 +93,10 @@ assert parsed == {
 ### How to publish to PyPi
 
 1. Bump version in [src/visualacuity-python/Cargo.toml](src/visualacuity-python/Cargo.toml)
-2. Commit that file and all other changes to `main`
-3. Create a tag for this commit reflecting the new version, e.g.: `git tag "python-0.1.0a5"`
-4. Push `main` branch to github
+2. Commit that file and all other changes to `main` or `staging`
+3. Push `main` or `staging` branch to github
+4. Check status on [GitHub Actions](https://github.com/HribarLab/visualacuity/actions)
+5. If the build is successful, tag the repo with the new version, e.g.: `git tag "python-0.1.0a5"`
+    * Prepend `test-` to publish to TestPyPi (e.g. `test-python-0.1.0a5`). These packages can be installed with `pip install --index-url https://test.pypi.org/legacy/ visualacuity`
+
 5. Check status on [GitHub Actions](https://github.com/HribarLab/visualacuity/actions)
