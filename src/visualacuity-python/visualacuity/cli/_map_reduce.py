@@ -1,11 +1,10 @@
 import abc
 import csv
 import json
+import logging
 import multiprocessing
 from functools import partial, cache
 from typing import TypeVar, Generic, Dict
-
-from tqdm import tqdm
 
 import visualacuity
 from visualacuity import Visit
@@ -31,7 +30,12 @@ class MapReduceLoader(Generic[TMap, TReduce], metaclass=abc.ABCMeta):
     @property
     @cache
     def progress(self):
-        return tqdm(unit="lines")
+        try:
+            from tqdm import tqdm
+            return tqdm(unit="lines")
+        except ImportError:
+            logging.warning(f"If you'd like a progress bar, do `pip install tqdm`")
+            return None
 
     def parse(self, row: Dict[str, str]) -> Visit:
         if self.preprocessed:
@@ -78,7 +82,7 @@ class MapReduceLoader(Generic[TMap, TReduce], metaclass=abc.ABCMeta):
 class MultiCsvReader:
     def __init__(self, filenames, progress):
         self.filenames = filenames
-        self.progress: tqdm = progress
+        self.progress = progress
 
     def __iter__(self):
         total = self._get_total_lines()
