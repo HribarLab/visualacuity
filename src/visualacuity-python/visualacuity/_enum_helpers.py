@@ -1,4 +1,4 @@
-from functools import cache
+from functools import lru_cache
 
 
 class _OrderedEnumMixIn:
@@ -21,14 +21,14 @@ class _FancyEnumMixIn:
         return self.name
 
     @classmethod
-    @cache
+    @lru_cache(maxsize=None)
     def _enum_ordinal(cls, obj):
         if not isinstance(obj, cls):
             raise TypeError(f"Expected `{cls.__name__}` for comparison, found `{type(obj).__name__}`")
         return list(cls).index(obj)
 
     @classmethod
-    @cache
+    @lru_cache(maxsize=None)
     def get(cls, value, default=None):
         '''
         Try to get an enum instance from a value

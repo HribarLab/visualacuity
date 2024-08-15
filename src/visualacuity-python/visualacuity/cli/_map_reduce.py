@@ -3,7 +3,7 @@ import csv
 import json
 import logging
 import multiprocessing
-from functools import partial, cache
+from functools import partial, lru_cache
 from typing import TypeVar, Generic, Dict
 
 import visualacuity
@@ -28,7 +28,7 @@ class MapReduceLoader(Generic[TMap, TReduce], metaclass=abc.ABCMeta):
         self.processes = processes
 
     @property
-    @cache
+    @lru_cache(maxsize=None)
     def progress(self):
         try:
             from tqdm import tqdm

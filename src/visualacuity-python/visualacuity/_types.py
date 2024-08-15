@@ -1,7 +1,7 @@
 import dataclasses
 from dataclasses import dataclass, field
 from enum import Enum
-from functools import cache
+from functools import lru_cache
 from numbers import Number
 from typing import List, Optional, Dict, NamedTuple
 
@@ -119,7 +119,7 @@ class VisitNote:
             raise ValueError(f"Notes had errors: {tuple(getattr(e, 'value', e) for e in errors)}")
 
     @classmethod
-    @cache
+    @lru_cache(maxsize=None)
     def fields(cls):
         return [f.name for f in dataclasses.fields(cls)]
 

@@ -1,6 +1,6 @@
 from collections import Counter
 from collections.abc import Mapping
-from functools import cache
+from functools import lru_cache
 
 
 class TabularCounter(Counter):
@@ -33,13 +33,16 @@ class TabularCounter(Counter):
         return repr(self.to_dataframe())
 
     def to_dataframe(self):
-        import pandas
-        df = pandas.DataFrame(0, self.rows, self.columns, dtype="int").rename_axis(self.rows.name, axis=0)
-        rows = {r: i for i, r in enumerate(df.index)}
-        columns = {c: i for i, c in enumerate(df.columns)}
-        for (row, column), value in self.items():
-            df.iloc[rows[row], columns[column]] = value
-        return df
+        try:
+            import pandas
+            df = pandas.DataFrame(0, self.rows, self.columns, dtype="int").rename_axis(self.rows.name, axis=0)
+            rows = {r: i for i, r in enumerate(df.index)}
+            columns = {c: i for i, c in enumerate(df.columns)}
+            for (row, column), value in self.items():
+                df.iloc[rows[row], columns[column]] = value
+            return df
+        except ImportError as e:
+            raise ImportError(f"Try `pip install pandas`") from e
 
 
 class _Index(list):
@@ -49,7 +52,7 @@ class _Index(list):
         for item in init or []:
             self.track(item)
 
-    @cache
+    @lru_cache(maxsize=None)
     def track(self, item):
         super().append(item)
         return item
