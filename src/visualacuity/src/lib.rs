@@ -23,7 +23,6 @@ mod distanceunits;
 pub(crate) mod errors;
 mod logmar;
 pub(crate) mod parser;
-mod read_file;
 mod snellen_equivalent;
 pub(crate) mod structure;
 mod types;
