@@ -1,10 +1,11 @@
 EHR Entry	EHR Entry Plus	Data Quality	Format	Extracted Value	Plus Letters	Comment
 20 / 30		Exact	Snellen	20/30		
 20 / 30 + 1		Exact	Snellen	20/30	+1	
-20 / 30 +3 -1		Exact	Snellen	20/30	+3, -1	
-20/30-1+6		Exact	Snellen	20/30	-1, +6	
-20/30	-1+6	Exact	Snellen	20/30	-1, +6	
 20/30 soft	+1 -3	ConvertibleConfident	Snellen	20/30	+1, -3	
+20 / 30 +3 -1		ConvertibleFuzzy	Snellen	20/30	+3, -1	
+20/30-1+6		ConvertibleFuzzy	Snellen	20/30	-1, +6	
+20/20+		ConvertibleFuzzy	Snellen	20/20		plus/minus no value -- fuzzy
+20/20-		ConvertibleFuzzy	Snellen	20/20		plus/minus no value -- fuzzy
 barely 20/30	+1 -3	ConvertibleConfident	Snellen	20/30	+1, -3	
 1) 20/30 and maybe some text	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
 1st 20/30 and maybe some text	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
@@ -32,25 +33,25 @@ HM		Exact	NearTotalLoss	HM
 JM		NoValue	Unknown			Typo for HM?
 NLP		Exact	NearTotalLoss	NLP		
 LP		Exact	NearTotalLoss	LP		
-BTL		NoValue	VisualResponse	BTL		
-blink to light		NoValue	VisualResponse	BTL		
-wince to light		NoValue	VisualResponse	WTL		
-WTL		NoValue	VisualResponse	WTL		
+BTL		Exact	VisualResponse	BTL		# Exact??
+blink to light		Exact	VisualResponse	BTL		# Exact??
+wince to light		Exact	VisualResponse	WTL		# Exact??
+WTL		Exact	VisualResponse	WTL		# Exact??
 CF at 1.5ft		Exact	NearTotalLoss	CF @ 1.5 feet		
 # CF 2		Exact	Unknown			
 # CF@3		Exact	Unknown			
-CSM		NoValue	VisualResponse	CSM		
-CSM Pref		NoValue	VisualResponse	CSM prefers		
-fix and follow		NoValue	VisualResponse	fix & follow		
-fix & follow		NoValue	VisualResponse	fix & follow		
-FF		NoValue	VisualResponse	fix & follow		
-F + F		NoValue	VisualResponse	fix & follow		
-F&F		NoValue	VisualResponse	fix & follow		
-f/f		NoValue	VisualResponse	fix & follow		
-no fix & follow		NoValue	VisualResponse	no fix & follow		
-Fix, No Follow		NoValue	VisualResponse	fix, no follow		
-# CSM, good f+f		NoValue	VisualResponse	CSM		Multiple values
-NI		CrossReference	Unknown	NI		If we can fill in the xref, we can update the format and extracted value
+CSM		Exact	VisualResponse	CSM		
+CSM Pref		Exact	VisualResponse	CSM prefers		
+fix and follow		Exact	VisualResponse	fix & follow		
+fix & follow		Exact	VisualResponse	fix & follow		
+FF		Exact	VisualResponse	fix & follow		
+F + F		Exact	VisualResponse	fix & follow		
+F&F		Exact	VisualResponse	fix & follow		
+f/f		Exact	VisualResponse	fix & follow		
+no fix & follow		Exact	VisualResponse	no fix & follow		
+Fix, No Follow		Exact	VisualResponse	fix, no follow		
+# CSM, good f+f		Exact	VisualResponse	CSM		Multiple values
+NI		CrossReference	CrossReference	NI		If we can fill in the xref, we can update the format and extracted value
 NT		NoValue	NotTaken	NT		
 unable		NoValue	NotTaken	Unable		
 prosthesis		NoValue	NotTaken	Prosthesis		

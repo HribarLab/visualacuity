@@ -15,7 +15,6 @@ use crate::cache::LruCacher;
 pub use crate::errors::{OptionResult, VisualAcuityError, VisualAcuityResult};
 use crate::ParsedItem::*;
 use crate::parser::*;
-pub(crate) use crate::parser::Content;
 pub use crate::visit::metadata::*;
 
 mod types;
@@ -29,6 +28,7 @@ mod visit;
 mod cache;
 mod visitinput;
 mod charts;
+mod read_file;
 
 #[cfg(test)]
 pub(crate) mod tests;
@@ -107,18 +107,14 @@ impl Parser {
 
     fn parse_text<'input>(&self, notes: &'input str) -> Content<'input, ParsedItemCollection> {
         let notes = notes.trim();
-        let (dq, content) = //self.parse_cache.get(binding, || {
-            match self.notes_parser.parse(notes) {
-                Ok(Content { content, data_quality: dq, .. }) => (dq, content),
-                Err(e) => (DataQuality::ConvertibleFuzzy, ParsedItemCollection(vec![Unhandled(format!(" {e}"))]))
-            };
-        //});
+        let (dq, content) = match self.notes_parser.parse(notes) {
+            Ok(Content { content, data_quality: dq, .. }) => (dq, content),
+            Err(e) => (DataQuality::ConvertibleFuzzy, ParsedItemCollection(vec![Unhandled(format!(" {e}"))]))
+        };
         Content::new(content, notes, dq)
     }
 
     fn parse_key<'input>(&self, key: &'input str) -> VisualAcuityResult<EntryMetadata> {
-        //self.key_cache.get(binding, || {
-            Ok(self.key_parser.parse(key)?)
-        //})
+        Ok(self.key_parser.parse(key)?)
     }
 }

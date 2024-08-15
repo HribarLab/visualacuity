@@ -48,7 +48,6 @@ fn validate<'a>(input: Content<'a, ParsedItem>) -> Content<'a, ParsedItem> {
                 Some(_) => input
             }
         VisualResponse(_) => input,
-        BinocularFixation(_) => input,
         CrossReferenceItem(_) => input,
         PlusLettersItem(_) => input,
         NotTakenItem(_) => input,

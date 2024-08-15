@@ -161,7 +161,8 @@ fn test_jaeger(chart_note: &str, expected: VisualAcuityResult<Vec<ParsedItem>>) 
 #[test_case("CF @ 0.3 meters", Ok(vec![NearTotalLoss(s!("CF"), Meters(0.3) )]))]
 #[test_case("CF @ 30 cm", Ok(vec![NearTotalLoss(s!("CF"), Centimeters(30.0) )]))]
 #[test_case("No BTL", Ok(vec![VisualResponse(s!("no BTL"))]))]
-#[test_case("CSM", Ok(vec ! [VisualResponse(s!("CSM"))]))]
+#[test_case("CSM", Ok(vec![VisualResponse(s!("CSM"))]))]
+#[test_case("CSM-pref", Ok(vec![VisualResponse(s!("CSM")), Text(s!("-pref"))]))]
 fn test_alternative_visual_acuity(chart_note: &str, expected: Result<Vec<ParsedItem>, ()>) {
     let expected = expected.map(|e| e.into_iter().collect());
     assert_eq!(parse_notes(chart_note).map_err(|_| ()), expected, "{chart_note:?}");
@@ -275,23 +276,6 @@ fn test_fix_and_follow(chart_note: &'static str, expected: VisualAcuityResult<Ve
 #[test_case("20/20 ETDRS (83 letters)", Ok(vec![SnellenFraction(s!("20/20")), ETDRS(s!("83 letters"))]))]
 fn test_various(chart_note: &'static str, expected: VisualAcuityResult<Vec<ParsedItem>>) {
     assert_eq!(parse_notes(chart_note), expected, "{chart_note}");
-}
-
-#[test_case("20/20 +1", "", (SnellenFraction(s!("20/20")), vec![1]))]
-#[test_case("J4 +2", "", (Jaeger(s!("J4")), vec![2]))]
-fn test_base_and_plus_letters(
-    notes: &str,
-    plus: &str,
-    expected: (ParsedItem, Vec<i32>)
-) -> Result<(), anyhow::Error> {
-    let parser = Parser::new();
-    let parsed_notes = parser.parse_text(notes).content;
-    let parsed_plus = parser.parse_text(plus).content;
-    let combined: ParsedItemCollection = [parsed_notes, parsed_plus].into_iter().flatten().collect();
-    let base_item = combined.base_acuity()?;
-    let plus_letters = combined.plus_letters();
-    assert_eq!((base_item, plus_letters), expected);
-    Ok(())
 }
 
 #[test_case("Both Eyes Distance CC", OU, Distance, CC, PinHole::Unknown)]

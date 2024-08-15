@@ -51,10 +51,10 @@ pub(crate) VA: Content<'input, ParsedItem> = {
     DQConvertibleConfident<JaegerConvertibleConfident> => <>,
     DQExact<ETDRSExact> => <>,
     DQExact<TellerExact> => <>,
-    DQExact<PlusLetters> => <>,
+    DQNoValue<PlusLetters> => <>,
     DQCrossReference<CrossReferenceItem> => <>,
     DQExact<NearTotalLossExact> => <>,
-    DQNoValue<VisualResponseExact> => <>,
+    DQExact<VisualResponseExact> => <>,
     DQNoValue<NotTaken> => <>,
     DQConvertibleConfident<OtherTextKnown> => <>.map(|t| Text(t.to_string())),
     DQConvertibleFuzzy<OtherTextUnknown> => <>.map(|t| Text(t.to_string())),
@@ -235,8 +235,8 @@ Feet = { "feet", "foot", "ft.", "ft", "f.", "f", "'" };
 
 OtherTextUnknown = { r#"\p{Letter}+"#, r#"\p{Symbol}"#, r#"\p{Punctuation}"# };
 OtherTextKnown = {
-    "+",
-    "-",
+//    "+",
+//    "-",
     "bare",
     "barely",
     "blurrier",

@@ -67,7 +67,6 @@ impl<'a> Chart<'a> {
         match PREDEFINED_CHARTS.get(name) {
             Some(chart) => Ok(chart),
             None => {
-                eprintln!("{:?}", PREDEFINED_CHARTS.keys().collect_vec());
                 // Here we could check whether there's a filename matching the string?
                 Err(ChartNotFound(name.to_string()))
             }

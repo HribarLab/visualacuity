@@ -98,7 +98,7 @@ impl VisitNote {
         parsed_text: Content<ParsedItemCollection>,
         parsed_text_plus: Content<ParsedItemCollection>,
     ) -> VisualAcuityResult<Self> {
-        let data_quality = parsed_text.data_quality.max(parsed_text_plus.data_quality);
+        let mut data_quality = parsed_text.data_quality.max(parsed_text_plus.data_quality);
         let Content { input: text, content: parsed_text, .. } = parsed_text;
         let Content { input: text_plus,  content: parsed_text_plus, .. } = parsed_text_plus;
         let parsed_notes = ParsedItemCollection([parsed_text, parsed_text_plus].into_iter().flatten().collect());
@@ -106,15 +106,21 @@ impl VisitNote {
         let base_acuity = &sifted.base_acuity;
         let log_mar_base = base_acuity.clone().then(|v| v.log_mar_base());
         let log_mar_base_plus_letters = base_acuity.clone().then(|v| v.log_mar_plus_letters(&sifted.plus_letters));
-        let va_format = get_va_format(&base_acuity, &sifted.acuities);
-        let extracted_value = extract_value(&base_acuity);
+        let other_options = &sifted.acuities.iter().chain(&sifted.other_observations).cloned().collect_vec();
+        let va_format = get_va_format(&base_acuity, other_options);
+        let extracted_value = extract_value(&base_acuity, &sifted.other_observations);
         let snellen_equivalent = base_acuity.clone().then(|v| v.snellen_equivalent());
         let plus_letters = sifted.plus_letters.clone();
-        let data_quality = match base_acuity {
+
+        data_quality = match base_acuity {
             OptionResult::None => NoValue,
             OptionResult::Err(MultipleValues(_)) => Multiple,
             _ => data_quality
         };
+        if plus_letters.len() > 1 && data_quality == Exact {
+            // "20/40 +3 -2" => not exact. Is there a cleaner way to do this?
+            data_quality = ConvertibleFuzzy;
+        }
 
         let EntryMetadata{ correction, pinhole, laterality, distance_of_measurement } = entry_metadata;
 
@@ -128,16 +134,22 @@ impl VisitNote {
 
 
 /// Retrieve the "normalized" text representing the primary observation in a given EHR note.
-fn extract_value(item: &OptionResult<ParsedItem>) -> String {
+fn extract_value(item: &OptionResult<ParsedItem>, other_observations: &Vec<ParsedItem>) -> String {
     match item {
         OptionResult::Some(s) => s.to_string(),
         OptionResult::Err(_) => format!("Error"),
-        OptionResult::None => String::default(),
+        OptionResult::None => match other_observations.first() {
+            Some(s) => s.to_string(),
+            None => String::default()
+        }
     }
 }
 
 /// Determine the format/method of the VA text.
-fn get_va_format(base_acuity: &OptionResult<ParsedItem>, other_acuities: &Vec<ParsedItem>) -> VisualAcuityResult<VAFormat> {
+fn get_va_format(
+    base_acuity: &OptionResult<ParsedItem>,
+    other_acuities: &Vec<ParsedItem>,
+) -> VisualAcuityResult<VAFormat> {
     // If there's a base_acuity, use the associated format.
     // Otherwise, see if there's a single format in the other_acuities.
     match base_acuity {
@@ -177,11 +189,10 @@ impl SiftedParsedItems {
                 | Teller { .. }
                 | ETDRS { .. }
                 | VisualResponse { .. }
+                | CrossReferenceItem(_)
                 | NearTotalLoss { .. } => result.acuities.push(item),
 
-                CrossReferenceItem(_)
-                | BinocularFixation(_)
-                | NotTakenItem(_) => result.other_observations.push(item),
+                NotTakenItem(_) => result.other_observations.push(item),
 
                 PlusLettersItem(value) => result.plus_letters.push(value),
                 DistanceItem(value) => result.distances.push(value),
@@ -212,9 +223,12 @@ impl SiftedParsedItems {
 
         match acuity_item {
             // If no acuity is present, see if we have another kind of observation
-            Ok(None) => self.other_observations.first().cloned().into(),
+            Ok(Some(VisualResponse(v))) => {
+                OptionResult::Some(VisualResponse(v.clone()))
+            },
             Ok(Some(v)) => OptionResult::Some(v.clone()),
-            Err(e) => OptionResult::Err(e.into())
+            Err(e) => OptionResult::Err(e.into()),
+            Ok(None) => OptionResult::None,
         }
     }
 }

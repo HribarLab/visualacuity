@@ -4,7 +4,6 @@ use std::slice::Iter;
 use std::str::FromStr;
 
 use derive_more::{Deref, IntoIterator};
-use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -99,7 +98,6 @@ pub enum ParsedItem {
     NearTotalLoss(String, DistanceUnits),
     VisualResponse(String),
     CrossReferenceItem(String),
-    BinocularFixation(FixationPreference),
     PlusLettersItem(i32),
     NotTakenItem(NotTakenReason),
 
@@ -129,7 +127,6 @@ impl Display for ParsedItem {
                 Ok(feet) => format!("{method} @ {} feet", feet.round_places(2)),
                 _ => format!("{method}")
             },
-            BinocularFixation(preference) => format!("{preference:?}"),
             NotTakenItem(reason) => format!("{reason:?}"),
             DistanceItem(d) => format!("{d}"),
             LateralityItem(l) => format!("{l}"),
@@ -142,17 +139,6 @@ impl Display for ParsedItem {
 }
 
 impl ParsedItem {
-    pub(crate) fn is_base(&self) -> bool {
-        match self {
-            &SnellenFraction { .. }
-                | &Jaeger { .. }
-                // | &TellerCard { .. }
-                | &ETDRS { .. }
-                | &NearTotalLoss { .. } => true,
-            _ => false,
-        }
-    }
-
     pub(crate) fn find_chart_row(&self) -> VisualAcuityResult<&ChartRow> {
         let key = self.chart_row_key()?;
         match ChartRow::find(&key) {
@@ -188,61 +174,8 @@ impl ParsedItem {
 pub struct ParsedItemCollection(pub(crate) Vec<ParsedItem>);
 
 impl ParsedItemCollection {
-
     pub fn iter(&self) -> Iter<'_, ParsedItem> { self.0.iter() }
     pub fn len(&self) -> usize { self.0.len() }
-
-    fn get_one<T, F>(&self, f: F) -> VisualAcuityResult<T>
-        where T: Clone + ToString, F: FnMut(&ParsedItem) -> Option<T>
-    {
-        Ok(self.iter().filter_map(f).exactly_one()?.into())
-    }
-
-    pub fn laterality(&self) -> VisualAcuityResult<Laterality> {
-        self.get_one(|item| match item {
-            LateralityItem(l) => Some(l.clone()),
-            _ => None
-        })
-    }
-
-    pub fn distance_of_measurement(&self) -> VisualAcuityResult<DistanceOfMeasurement> {
-        self.get_one(|item| match item {
-            DistanceItem(d) => Some(d.clone()),
-            _ => None
-        })
-    }
-
-    pub fn correction(&self) -> VisualAcuityResult<Correction> {
-        self.get_one(|item| match item {
-            CorrectionItem(c) => Some(c.clone()),
-            _ => None
-        })
-    }
-
-    pub fn plus_letters(&self) -> Vec<i32> {
-        self.iter().filter_map(|item| match item {
-            PlusLettersItem(value) => Some(*value),
-            _ => None
-        }).collect()
-    }
-
-    pub fn base_acuity(&self) -> VisualAcuityResult<ParsedItem> {
-        fn match_base_item<'b>(item: &ParsedItem) -> Option<ParsedItem> {
-            if item.is_base() { Some(item.clone()) } else { None }
-        }
-        self.get_one(match_base_item)
-    }
-
-    pub fn va_format(&self) -> VAFormat {
-        self.get_one(|item| match item {
-            SnellenFraction { .. } => Some(VAFormat::Snellen),
-            Jaeger { .. } => Some(VAFormat::Jaeger),
-            ETDRS { .. } => Some(VAFormat::ETDRS),
-            Teller { .. } => Some(VAFormat::Teller),
-            NearTotalLoss { .. } => Some(VAFormat::NearTotalLoss),
-            _ => None
-        }).unwrap_or(VAFormat::Unknown)
-    }
 }
 
 impl FromIterator<ParsedItem> for ParsedItemCollection {
@@ -265,6 +198,7 @@ pub enum VAFormat {
     PinHole,
     Binocular,
     NotTaken,
+    CrossReference,
 }
 
 impl From<ParsedItem> for VAFormat {
@@ -277,9 +211,8 @@ impl From<ParsedItem> for VAFormat {
             NearTotalLoss { .. } => VAFormat::NearTotalLoss,
             VisualResponse { .. } => VAFormat::VisualResponse,
             PinHoleItem(_) => VAFormat::PinHole,
-            BinocularFixation(_) => VAFormat::Binocular,
             NotTakenItem(_) => VAFormat::NotTaken,
-            CrossReferenceItem(_) => VAFormat::Unknown,
+            CrossReferenceItem(_) => VAFormat::CrossReference,
             _ => VAFormat::Unknown,
         }
     }

@@ -13,6 +13,19 @@ mod tests {
 
     type R<T> = VisualAcuityResult<T>;
 
+    #[test]
+    fn test_base_and_plus_letters() -> R<()> {
+        let notes = "CSM";
+
+        let parsed_notes = Parser::new().parse_text(notes).content;
+        let sifted = &SiftedParsedItems::sift(parsed_notes);
+
+        assert_eq!(vec![VisualResponse(s!("CSM"))], sifted.acuities);
+        assert_eq!(OptionResult::Some(VisualResponse(s!("CSM"))), sifted.base_acuity_());
+        Ok(())
+    }
+
+
     #[test_case(
         [
         ("Both Eyes Distance CC", "20/20"),
@@ -106,6 +119,8 @@ mod tests {
     }
 
     #[test_case([("Visual Acuity", "20/30 OS")], Ok(ConvertibleFuzzy))]
+    #[test_case([("Visual Acuity", "CSM")], Ok(Exact))]
+    #[test_case([("Visual Acuity", "CSM pref")], Ok(Exact))]
     fn test_visit_data_quality<'a, X>(visit_notes: X, expected: R<DataQuality>)
         where X: Into<VisitInput>
     {

@@ -7,5 +7,4 @@ pub enum DataQuality {
     Multiple = 3,
     ConvertibleConfident = 4,
     ConvertibleFuzzy = 5,
-    Unusable = 999,
 }
