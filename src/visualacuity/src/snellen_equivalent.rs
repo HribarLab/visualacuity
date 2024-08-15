@@ -1,6 +1,6 @@
-use crate::*;
 use crate::charts::ChartRow;
 use crate::VisualAcuityError::*;
+use crate::*;
 
 pub(crate) trait SnellenEquivalent {
     fn snellen_equivalent(&self) -> VisualAcuityResult<Fraction>;
@@ -11,7 +11,11 @@ impl SnellenEquivalent for ParsedItem {
         // This leans on data found in the files assets/charts/*.tsv
         let error = |_| NoSnellenEquivalent(self.to_string());
         match self.find_chart_row() {
-            Ok(ChartRow { fraction: Some(ref_acuity), reference_distance, .. }) => {
+            Ok(ChartRow {
+                fraction: Some(ref_acuity),
+                reference_distance,
+                ..
+            }) => {
                 if reference_distance == &DistanceUnits::NotProvided {
                     // Found a chart row + no conversion necessary.
                     return Ok(ref_acuity.clone());
@@ -23,8 +27,8 @@ impl SnellenEquivalent for ParsedItem {
                 let converted_row = ref_row * ref_feet / feet;
                 let rounded_row = (converted_row as u64) as f64;
                 Ok(Fraction((converted_distance, rounded_row)))
-            },
-            _ => Err(NoSnellenEquivalent(self.to_string()))
+            }
+            _ => Err(NoSnellenEquivalent(self.to_string())),
         }
     }
 }
@@ -32,14 +36,20 @@ impl SnellenEquivalent for ParsedItem {
 impl SnellenEquivalent for ChartRow {
     fn snellen_equivalent(&self) -> VisualAcuityResult<Fraction> {
         match self {
-            ChartRow { fraction: Some(ref_acuity), reference_distance, .. } => {
+            ChartRow {
+                fraction: Some(ref_acuity),
+                reference_distance,
+                ..
+            } => {
                 match reference_distance {
                     // Found a chart row + no conversion necessary.
                     DistanceUnits::NotProvided => Ok(ref_acuity.clone()),
-                    _ => Err(NoSnellenEquivalent(format!("Measurement distance required! {self:?}")))
+                    _ => Err(NoSnellenEquivalent(format!(
+                        "Measurement distance required! {self:?}"
+                    ))),
                 }
-            },
-            _ => Err(NoSnellenEquivalent(format!("{self:?}")))
+            }
+            _ => Err(NoSnellenEquivalent(format!("{self:?}"))),
         }
     }
 }

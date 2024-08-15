@@ -36,25 +36,48 @@ impl<'a> Parse<'a, Content<'a, ParsedItemCollection>> for ChartNotesParser {
         let s = orig.to_lowercase();
         let parsed = self.0.parse(orig, s.as_str())?;
         // Do a little switcheroo for lifetime reasons:
-        Ok(Content{input: orig, ..parsed})
+        Ok(Content {
+            input: orig,
+            ..parsed
+        })
     }
 }
 
 pub(crate) struct KeyParser(crate::parser::key::KeyParser);
-impl_parser!(KeyParser, crate::parser::key::KeyParser, crate::EntryMetadata);
+impl_parser!(
+    KeyParser,
+    crate::parser::key::KeyParser,
+    crate::EntryMetadata
+);
 
 #[allow(dead_code)]
 pub(crate) struct PlusLettersParser(crate::parser::grammar::PlusLettersParser);
-impl_parser!(PlusLettersParser, crate::parser::grammar::PlusLettersParser, crate::ParsedItem);
+impl_parser!(
+    PlusLettersParser,
+    crate::parser::grammar::PlusLettersParser,
+    crate::ParsedItem
+);
 
 #[allow(dead_code)]
 pub(crate) struct JaegerExactParser(crate::parser::grammar::JaegerExactParser);
-impl_parser!(JaegerExactParser, crate::parser::grammar::JaegerExactParser, crate::ParsedItem);
+impl_parser!(
+    JaegerExactParser,
+    crate::parser::grammar::JaegerExactParser,
+    crate::ParsedItem
+);
 
 #[allow(dead_code)]
 pub(crate) struct SnellenExactParser(crate::parser::grammar::SnellenExactParser);
-impl_parser!(SnellenExactParser, crate::parser::grammar::SnellenExactParser, crate::ParsedItem);
+impl_parser!(
+    SnellenExactParser,
+    crate::parser::grammar::SnellenExactParser,
+    crate::ParsedItem
+);
 
 #[allow(dead_code)]
 pub(crate) struct DistanceUnitsParser(crate::parser::grammar::DistanceUnitsParser);
-impl_parser!(DistanceUnitsParser, crate::parser::grammar::DistanceUnitsParser, crate::DistanceUnits);
+impl_parser!(
+    DistanceUnitsParser,
+    crate::parser::grammar::DistanceUnitsParser,
+    crate::DistanceUnits
+);

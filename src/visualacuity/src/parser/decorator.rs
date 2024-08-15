@@ -1,10 +1,9 @@
-use core::fmt::{Debug, Display, Formatter};
 use crate::dataquality::DataQuality;
 use crate::DataQuality::*;
+use core::fmt::{Debug, Display, Formatter};
 
 pub trait TInput: PartialEq + Debug + Clone {}
 impl<T> TInput for T where T: PartialEq + Debug + Clone {}
-
 
 #[derive(PartialEq, Debug, Clone)]
 pub(crate) struct Content<'input, T: TInput> {
@@ -17,12 +16,30 @@ pub(crate) struct Content<'input, T: TInput> {
 
 impl<'input, T: TInput> Content<'input, T> {
     pub(crate) fn new(content: T, input: &'input str, dq: DataQuality) -> Self {
-        Self { content, input, left: 0, right: input.len(), data_quality: dq }
+        Self {
+            content,
+            input,
+            left: 0,
+            right: input.len(),
+            data_quality: dq,
+        }
     }
 
     pub(crate) fn map<U: TInput, M: Fn(&T) -> U>(&self, mapper: M) -> Content<'input, U> {
-        let Content { input, left, right, data_quality: dq, .. } = self.clone();
-        Content { content: mapper(&self.content), input, left, right, data_quality: dq }
+        let Content {
+            input,
+            left,
+            right,
+            data_quality: dq,
+            ..
+        } = self.clone();
+        Content {
+            content: mapper(&self.content),
+            input,
+            left,
+            right,
+            data_quality: dq,
+        }
     }
 
     pub(crate) fn input_string(&self) -> String {
@@ -31,13 +48,22 @@ impl<'input, T: TInput> Content<'input, T> {
 }
 
 impl<'a, T, O> FromIterator<Content<'a, T>> for Content<'a, O>
-    where T: TInput, O: FromIterator<T> + TInput
+where
+    T: TInput,
+    O: FromIterator<T> + TInput,
 {
-    fn from_iter<I: IntoIterator<Item=Content<'a, T>>>(iter: I) -> Self {
+    fn from_iter<I: IntoIterator<Item = Content<'a, T>>>(iter: I) -> Self {
         let mut result = Content::<Vec<T>>::default();
         result.data_quality = NoValue;
 
-        for Content { content, input, right, data_quality, .. } in iter {
+        for Content {
+            content,
+            input,
+            right,
+            data_quality,
+            ..
+        } in iter
+        {
             result.content.push(content);
             result.input = input;
             result.right = result.right.max(right);
@@ -49,7 +75,13 @@ impl<'a, T, O> FromIterator<Content<'a, T>> for Content<'a, O>
 
 impl<'input, T: TInput + Default> Default for Content<'input, T> {
     fn default() -> Self {
-        Self { content: T::default(), input: "", left: 0, right: 0, data_quality: Default::default() }
+        Self {
+            content: T::default(),
+            input: "",
+            left: 0,
+            right: 0,
+            data_quality: Default::default(),
+        }
     }
 }
 

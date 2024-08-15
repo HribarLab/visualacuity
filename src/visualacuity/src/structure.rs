@@ -1,25 +1,33 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::hash::{Hash, Hasher};
+use std::ops::Deref;
 use std::slice::Iter;
 use std::str::FromStr;
 
-use derive_more::{Deref, IntoIterator};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::*;
-use crate::VisualAcuityError::*;
 use crate::charts::ChartRow;
-use crate::DistanceUnits::NotProvided;
 use crate::helpers::RoundPlaces;
+use crate::DistanceUnits::NotProvided;
+use crate::VisualAcuityError::*;
+use crate::*;
 
 lazy_static! {
-static ref PATTERN_FRACTION: Regex = Regex::new(r"^\s*(\d+(?:\.\d*)?)\s*/\s*(\d+(?:\.\d*)?)\s*$").expect("");
+    static ref PATTERN_FRACTION: Regex =
+        Regex::new(r"^\s*(\d+(?:\.\d*)?)\s*/\s*(\d+(?:\.\d*)?)\s*$").expect("");
 }
 
-
-#[derive(Clone, Copy, PartialEq, Deref, Debug)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Fraction(pub(crate) (f64, f64));
+
+impl Deref for Fraction {
+    type Target = (f64, f64);
+
+    fn deref(&self) -> &Self::Target {
+        return &self.0
+    }
+}
 
 impl Display for Fraction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -35,18 +43,23 @@ impl Hash for Fraction {
 }
 
 impl<T: Into<f64>> From<(T, T)> for Fraction {
-    fn from((n, d): (T, T)) -> Self { Self((n.into(), d.into())) }
+    fn from((n, d): (T, T)) -> Self {
+        Self((n.into(), d.into()))
+    }
 }
 
 impl<T: From<f64>> From<Fraction> for (T, T) {
-    fn from(fraction: Fraction) -> Self { (fraction.0.0.into(), fraction.0.1.into()) }
+    fn from(fraction: Fraction) -> Self {
+        (fraction.0 .0.into(), fraction.0 .1.into())
+    }
 }
 
 impl FromStr for Fraction {
     type Err = VisualAcuityError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = PATTERN_FRACTION.captures(s)
+        let value = PATTERN_FRACTION
+            .captures(s)
             .and_then(|c| Some((c.get(1)?.as_str(), c.get(2)?.as_str())))
             .map(|(n, d)| Ok((n.parse()?, d.parse()?)))
             .unwrap_or_else(|| Err(ParseError(format!("{s}"))));
@@ -107,7 +120,7 @@ pub enum ParsedItem {
     CorrectionItem(Correction),
     PinHoleItem(PinHole),
 
-    Text(String),  // text that isn't really part of a structured VA
+    Text(String), // text that isn't really part of a structured VA
     Unhandled(String),
 }
 
@@ -119,13 +132,17 @@ impl Display for ParsedItem {
             | ETDRS(s)
             | Teller(s)
             | VisualResponse(s)
-            | CrossReferenceItem(s) => {
-                s.to_string()
-            },
-            PlusLettersItem(n) => if *n > 0 { format!("+{self}") } else { format!("{n}") },
+            | CrossReferenceItem(s) => s.to_string(),
+            PlusLettersItem(n) => {
+                if *n > 0 {
+                    format!("+{self}")
+                } else {
+                    format!("{n}")
+                }
+            }
             NearTotalLoss(method, distance) => match distance.to_feet() {
                 Ok(feet) => format!("{method} @ {} feet", feet.round_places(2)),
-                _ => format!("{method}")
+                _ => format!("{method}"),
             },
             NotTakenItem(reason) => format!("{reason:?}"),
             DistanceItem(d) => format!("{d}"),
@@ -149,41 +166,39 @@ impl ParsedItem {
 
     pub(crate) fn chart_row_key(&self) -> VisualAcuityResult<String> {
         match self {
-            SnellenFraction(_)
-            | ETDRS { .. }
-            | Teller(_)
-            | Jaeger(_) => {
-                Ok(self.to_string())
-            },
-            NearTotalLoss(s, ..) => {
-                Ok(s.to_string())
-            },
-            _ => Err(NoSnellenEquivalent(self.to_string()))
+            SnellenFraction(_) | ETDRS { .. } | Teller(_) | Jaeger(_) => Ok(self.to_string()),
+            NearTotalLoss(s, ..) => Ok(s.to_string()),
+            _ => Err(NoSnellenEquivalent(self.to_string())),
         }
     }
 
     pub(crate) fn measurement_distance(&self) -> &DistanceUnits {
         match self {
             NearTotalLoss(_, distance) => distance,
-            _ => &NotProvided
+            _ => &NotProvided,
         }
     }
 }
 
-#[derive(IntoIterator, PartialEq, Clone, Debug, Default)]
+#[derive(PartialEq, Clone, Debug, Default)]
 pub struct ParsedItemCollection(pub(crate) Vec<ParsedItem>);
 
-impl ParsedItemCollection {
-    pub fn iter(&self) -> Iter<'_, ParsedItem> { self.0.iter() }
-    pub fn len(&self) -> usize { self.0.len() }
-}
+impl_into_iter!(ParsedItemCollection, Vec<ParsedItem>);
 
-impl FromIterator<ParsedItem> for ParsedItemCollection {
-    fn from_iter<I: IntoIterator<Item=ParsedItem>>(iter: I) -> Self {
-        Self(iter.into_iter().collect())
+impl ParsedItemCollection {
+    pub fn iter(&self) -> Iter<'_, ParsedItem> {
+        self.0.iter()
+    }
+    pub fn len(&self) -> usize {
+        self.0.len()
     }
 }
 
+impl FromIterator<ParsedItem> for ParsedItemCollection {
+    fn from_iter<I: IntoIterator<Item = ParsedItem>>(iter: I) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
 
 #[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VAFormat {

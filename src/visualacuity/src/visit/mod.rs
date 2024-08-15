@@ -1,23 +1,22 @@
 use std::collections::BTreeMap;
 
-use derive_more::IntoIterator;
-use itertools::Itertools;
-use metadata::{Correction, DistanceOfMeasurement, Laterality, PinHole};
-use crate::{CorrectionItem, ParsedItem, ParsedItemCollection, VisualAcuityResult};
 use crate::dataquality::DataQuality;
-use crate::DataQuality::*;
-use metadata::DistanceOfMeasurement::Distance;
-use crate::Correction::Manifest;
 use crate::errors::OptionResult;
 use crate::logmar::{LogMarBase, LogMarPlusLetters};
 use crate::parser::Content;
 use crate::snellen_equivalent::SnellenEquivalent;
 use crate::structure::{Fraction, VAFormat};
-use crate::*;
+use crate::Correction::Manifest;
+use crate::DataQuality::*;
 use crate::VisualAcuityError::MultipleValues;
+use crate::*;
+use crate::{CorrectionItem, ParsedItem, ParsedItemCollection, VisualAcuityResult};
+use itertools::Itertools;
+use metadata::DistanceOfMeasurement::Distance;
+use metadata::{Correction, DistanceOfMeasurement, Laterality, PinHole};
 
-mod tests;
 pub(crate) mod metadata;
+mod tests;
 
 #[derive(Default, PartialEq, Debug, Clone)]
 pub struct EntryMetadata {
@@ -41,19 +40,23 @@ impl EntryMetadata {
 
         // Incrementally build up the struct from each item
         match item {
-            CorrectionItem(correction) => Self{ correction, ..self },
-            DistanceItem(distance_of_measurement) => Self{ distance_of_measurement, ..self },
-            LateralityItem(laterality) => Self{ laterality, ..self },
-            PinHoleItem(pinhole) => Self{ pinhole, ..self },
-            _ => self
+            CorrectionItem(correction) => Self { correction, ..self },
+            DistanceItem(distance_of_measurement) => Self {
+                distance_of_measurement,
+                ..self
+            },
+            LateralityItem(laterality) => Self { laterality, ..self },
+            PinHoleItem(pinhole) => Self { pinhole, ..self },
+            _ => self,
         }
     }
 }
 
-
 /// The public return type representing a parsed & processed set of EHR notes for a patient visit
-#[derive(IntoIterator, PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Visit(pub(crate) BTreeMap<String, Option<VisitNote>>);
+
+impl_into_iter!(Visit, BTreeMap<String, Option<VisitNote>>);
 
 /// The parsed & processed observations from an EHR field (with "plus" columns merged if possible)
 #[derive(PartialEq, Debug, Clone)]
@@ -99,14 +102,34 @@ impl VisitNote {
         parsed_text_plus: Content<ParsedItemCollection>,
     ) -> VisualAcuityResult<Self> {
         let mut data_quality = parsed_text.data_quality.max(parsed_text_plus.data_quality);
-        let Content { input: text, content: parsed_text, .. } = parsed_text;
-        let Content { input: text_plus,  content: parsed_text_plus, .. } = parsed_text_plus;
-        let parsed_notes = ParsedItemCollection([parsed_text, parsed_text_plus].into_iter().flatten().collect());
+        let Content {
+            input: text,
+            content: parsed_text,
+            ..
+        } = parsed_text;
+        let Content {
+            input: text_plus,
+            content: parsed_text_plus,
+            ..
+        } = parsed_text_plus;
+        let parsed_notes = ParsedItemCollection(
+            [parsed_text, parsed_text_plus]
+                .into_iter()
+                .flatten()
+                .collect(),
+        );
         let sifted = &SiftedParsedItems::sift(parsed_notes);
         let base_acuity = &sifted.base_acuity;
         let log_mar_base = base_acuity.clone().then(|v| v.log_mar_base());
-        let log_mar_base_plus_letters = base_acuity.clone().then(|v| v.log_mar_plus_letters(&sifted.plus_letters));
-        let other_options = &sifted.acuities.iter().chain(&sifted.other_observations).cloned().collect_vec();
+        let log_mar_base_plus_letters = base_acuity
+            .clone()
+            .then(|v| v.log_mar_plus_letters(&sifted.plus_letters));
+        let other_options = &sifted
+            .acuities
+            .iter()
+            .chain(&sifted.other_observations)
+            .cloned()
+            .collect_vec();
         let va_format = get_va_format(&base_acuity, other_options);
         let extracted_value = extract_value(&base_acuity, &sifted.other_observations);
         let snellen_equivalent = base_acuity.clone().then(|v| v.snellen_equivalent());
@@ -115,23 +138,37 @@ impl VisitNote {
         data_quality = match base_acuity {
             OptionResult::None => NoValue,
             OptionResult::Err(MultipleValues(_)) => Multiple,
-            _ => data_quality
+            _ => data_quality,
         };
         if plus_letters.len() > 1 && data_quality == Exact {
             // "20/40 +3 -2" => not exact. Is there a cleaner way to do this?
             data_quality = ConvertibleFuzzy;
         }
 
-        let EntryMetadata{ correction, pinhole, laterality, distance_of_measurement } = entry_metadata;
+        let EntryMetadata {
+            correction,
+            pinhole,
+            laterality,
+            distance_of_measurement,
+        } = entry_metadata;
 
         Ok(VisitNote {
-            text: text.to_string(), text_plus: text_plus.to_string(), extracted_value, data_quality,
-            distance_of_measurement, correction, pinhole, laterality, plus_letters,
-            va_format, snellen_equivalent, log_mar_base, log_mar_base_plus_letters
+            text: text.to_string(),
+            text_plus: text_plus.to_string(),
+            extracted_value,
+            data_quality,
+            distance_of_measurement,
+            correction,
+            pinhole,
+            laterality,
+            plus_letters,
+            va_format,
+            snellen_equivalent,
+            log_mar_base,
+            log_mar_base_plus_letters,
         })
     }
 }
-
 
 /// Retrieve the "normalized" text representing the primary observation in a given EHR note.
 fn extract_value(item: &OptionResult<ParsedItem>, other_observations: &Vec<ParsedItem>) -> String {
@@ -140,8 +177,8 @@ fn extract_value(item: &OptionResult<ParsedItem>, other_observations: &Vec<Parse
         OptionResult::Err(_) => format!("Error"),
         OptionResult::None => match other_observations.first() {
             Some(s) => s.to_string(),
-            None => String::default()
-        }
+            None => String::default(),
+        },
     }
 }
 
@@ -154,11 +191,17 @@ fn get_va_format(
     // Otherwise, see if there's a single format in the other_acuities.
     match base_acuity {
         OptionResult::Some(ref value) => Ok(value.clone().into()),
-        _ => match other_acuities.into_iter().cloned().map_into().unique().at_most_one() {
+        _ => match other_acuities
+            .into_iter()
+            .cloned()
+            .map_into()
+            .unique()
+            .at_most_one()
+        {
             Ok(Some(item)) => Ok(item),
             Ok(None) => Ok(Default::default()),
-            Err(e) => Err(e.into())
-        }
+            Err(e) => Err(e.into()),
+        },
     }
 }
 
@@ -175,7 +218,7 @@ struct SiftedParsedItems {
     corrections: Vec<Correction>,
     pin_hole: Vec<PinHole>,
     unhandled: Vec<ParsedItem>,
-    base_acuity: OptionResult<ParsedItem>
+    base_acuity: OptionResult<ParsedItem>,
 }
 
 impl SiftedParsedItems {
@@ -211,21 +254,18 @@ impl SiftedParsedItems {
     /// Given `ParsedItem`s, determine which one reperesents a "base acuity." If none are present,
     /// consider "other observations" (e.g. binocular fixation) that might be the primary observation.
     fn base_acuity_(&self) -> OptionResult<ParsedItem> {
-        let unique_acuities = self.acuities.iter()
-            .rev()  // Take the *last* equivalent thing (e.g. ETDRS)
+        let unique_acuities = self
+            .acuities
+            .iter()
+            .rev() // Take the *last* equivalent thing (e.g. ETDRS)
             .unique_by(|&acuity| acuity.snellen_equivalent())
             .collect_vec();
 
-        let acuity_item = unique_acuities
-            .into_iter()
-            .rev()
-            .at_most_one();
+        let acuity_item = unique_acuities.into_iter().rev().at_most_one();
 
         match acuity_item {
             // If no acuity is present, see if we have another kind of observation
-            Ok(Some(VisualResponse(v))) => {
-                OptionResult::Some(VisualResponse(v.clone()))
-            },
+            Ok(Some(VisualResponse(v))) => OptionResult::Some(VisualResponse(v.clone())),
             Ok(Some(v)) => OptionResult::Some(v.clone()),
             Err(e) => OptionResult::Err(e.into()),
             Ok(None) => OptionResult::None,

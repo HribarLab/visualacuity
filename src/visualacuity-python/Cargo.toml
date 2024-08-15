@@ -11,7 +11,7 @@ crate-type = ["cdylib", "lib"]
 visualacuity = { path = "../visualacuity" }
 anyhow = "1.0.75"
 lazy_static = "1.4.0"
-pyo3 = { version = "0.19.2", features = ["anyhow", "extension-module", "abi3", "abi3-py37"] }
+pyo3 = { version = "0.19.2", features = ["extension-module", "abi3", "abi3-py37"] }
 itertools = "0.12.0"
 
 [dev-dependencies]

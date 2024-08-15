@@ -1,4 +1,4 @@
-#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Default, )]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Clone, Default)]
 pub enum DataQuality {
     #[default]
     NoValue = 0,

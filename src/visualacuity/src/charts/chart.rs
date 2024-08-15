@@ -1,11 +1,11 @@
-use std::collections::BTreeMap;
-use lazy_static::lazy_static;
-use std::str::FromStr;
-use itertools::Itertools;
-use crate::{DistanceUnits, Fraction};
-use crate::VisualAcuityError::{ChartNotFound, MultipleValues, ParseError};
-use crate::{VisualAcuityError, VisualAcuityResult};
 use crate::logmar::LogMarBase;
+use crate::VisualAcuityError::{ChartNotFound, MultipleValues, ParseError};
+use crate::{DistanceUnits, Fraction};
+use crate::{VisualAcuityError, VisualAcuityResult};
+use itertools::Itertools;
+use lazy_static::lazy_static;
+use std::collections::BTreeMap;
+use std::str::FromStr;
 
 lazy_static! {
     // Pre-load data from the chart definition files in ../../assets/charts
@@ -79,9 +79,11 @@ impl<'a> Chart<'a> {
         let mut log_mars = BTreeMap::new();
 
         // Collect up some parsed `ChartRow`s
-        let rows: Vec<(i8, &str, ChartRow)> = contents.into_iter()
+        let rows: Vec<(i8, &str, ChartRow)> = contents
+            .into_iter()
             .flat_map(|(chart_name, content)| {
-                map_tsv(content).into_iter()
+                map_tsv(content)
+                    .into_iter()
                     .map(|r| (chart_name, r))
                     .collect_vec()
             })
@@ -95,17 +97,28 @@ impl<'a> Chart<'a> {
             })
             .try_collect()?;
 
-            for (row_number, row_text, mut chart_row) in rows {
-                chart_row.next_n_letters = n_letters.get(&(row_number - 1)).cloned().unwrap_or_default();
-                chart_row.next_log_mar = log_mars.get(&(row_number - 1)).cloned().flatten().unwrap_or_default();
-                chart_row.prev_log_mar = log_mars.get(&(row_number + 1)).cloned().flatten().unwrap_or_default();
+        for (row_number, row_text, mut chart_row) in rows {
+            chart_row.next_n_letters = n_letters
+                .get(&(row_number - 1))
+                .cloned()
+                .unwrap_or_default();
+            chart_row.next_log_mar = log_mars
+                .get(&(row_number - 1))
+                .cloned()
+                .flatten()
+                .unwrap_or_default();
+            chart_row.prev_log_mar = log_mars
+                .get(&(row_number + 1))
+                .cloned()
+                .flatten()
+                .unwrap_or_default();
 
-                let found = chart.by_row_number.insert(row_number, chart_row.clone());
-                if found.is_some() && found.as_ref() != Some(&chart_row) {
-                    return Err(MultipleValues(format!("{chart_row:?}")));
-                }
-                chart.by_text.insert(row_text, chart_row);
+            let found = chart.by_row_number.insert(row_number, chart_row.clone());
+            if found.is_some() && found.as_ref() != Some(&chart_row) {
+                return Err(MultipleValues(format!("{chart_row:?}")));
             }
+            chart.by_text.insert(row_text, chart_row);
+        }
         // }
         Ok(chart)
     }
@@ -124,61 +137,88 @@ pub struct ChartRow {
     pub(crate) n_letters: Option<u8>,
     pub(crate) prev_log_mar: Option<f64>,
     pub(crate) next_log_mar: Option<f64>,
-    pub(crate) next_n_letters: Option<u8>
+    pub(crate) next_n_letters: Option<u8>,
 }
 
 impl ChartRow {
     /// Static lookup for a chart row by normalized text, searching all pre-loaded `Chart`
     /// definitions. Chart priority is specified in `ORDERED_CHARTS` above.
     pub(crate) fn find<'a, S: ToString>(value: &S) -> Option<&'a Self> {
-        ORDERED_CHARTS.iter()
+        ORDERED_CHARTS
+            .iter()
             .filter_map(|chart| chart.get_row(value.to_string().as_str().trim()))
             .next()
     }
 }
 
-fn parse_row<'a>(chart_name: &'a str, row: BTreeMap<&'a str, &'a str>) -> VisualAcuityResult<(i8, &'a str, ChartRow)> {
-    let row_number = row.get("Row").expect("Must contain a row number!").parse()?;
+fn parse_row<'a>(
+    chart_name: &'a str,
+    row: BTreeMap<&'a str, &'a str>,
+) -> VisualAcuityResult<(i8, &'a str, ChartRow)> {
+    let row_number = row
+        .get("Row")
+        .expect("Must contain a row number!")
+        .parse()?;
     let row_text = row.get("Text").expect("Must contain text!");
     let fraction = parse_some(nonempty(row.get("Fraction").cloned()))?;
     let log_mar = row.get("LogMAR").map(|&s| s.trim_start_matches('+'));
     let log_mar = parse_some(nonempty(log_mar))?;
     let (fraction, log_mar) = fill_in_log_mar(fraction, log_mar)?;
     let n_letters = parse_some(nonempty(row.get("Letters").cloned()))?;
-    let reference_distance = parse_some(nonempty(row.get("Distance").cloned()))?
-        .unwrap_or_default();
+    let reference_distance =
+        parse_some(nonempty(row.get("Distance").cloned()))?.unwrap_or_default();
     let prev_log_mar = None;
     let next_log_mar = None;
     let next_n_letters = None;
     let chart_name = chart_name.to_string();
     let chart_row = ChartRow {
-        chart_name, row_number, fraction, reference_distance,
-        log_mar, n_letters, prev_log_mar, next_log_mar, next_n_letters
+        chart_name,
+        row_number,
+        fraction,
+        reference_distance,
+        log_mar,
+        n_letters,
+        prev_log_mar,
+        next_log_mar,
+        next_n_letters,
     };
     Ok((row_number, *row_text, chart_row))
 }
 
-
 fn parse_some<T: FromStr>(s: Option<&str>) -> VisualAcuityResult<Option<T>>
-    where VisualAcuityError: From<<T as FromStr>::Err>
+where
+    VisualAcuityError: From<<T as FromStr>::Err>,
 {
-    let Some(s) = s else { return Ok(None); };
-    s.parse::<T>().map(|obj| Some(obj)).map_err(|_| ParseError(s.to_string()))
+    let Some(s) = s else {
+        return Ok(None);
+    };
+    s.parse::<T>()
+        .map(|obj| Some(obj))
+        .map_err(|_| ParseError(s.to_string()))
 }
 
 fn nonempty(s: Option<&str>) -> Option<&str> {
-    match s.map(str::trim) { None => None, Some("") => None, Some(s) => Some(s) }
-}
-
-fn fill_in_log_mar(fraction: Option<Fraction>, log_mar: Option<f64>) -> VisualAcuityResult<(Option<Fraction>, Option<f64>)> {
-    match (fraction, log_mar) {
-        (Some(fraction), None) => Ok((Some(fraction), Some(fraction.log_mar_base()?))),
-        _ => Ok((fraction, log_mar))
+    match s.map(str::trim) {
+        None => None,
+        Some("") => None,
+        Some(s) => Some(s),
     }
 }
 
+fn fill_in_log_mar(
+    fraction: Option<Fraction>,
+    log_mar: Option<f64>,
+) -> VisualAcuityResult<(Option<Fraction>, Option<f64>)> {
+    match (fraction, log_mar) {
+        (Some(fraction), None) => Ok((Some(fraction), Some(fraction.log_mar_base()?))),
+        _ => Ok((fraction, log_mar)),
+    }
+}
 
-fn load_predefined<'a>(name: &'a str, filenames: Vec<&'a str>) -> VisualAcuityResult<(&'a str, Chart<'a>)> {
+fn load_predefined<'a>(
+    name: &'a str,
+    filenames: Vec<&'a str>,
+) -> VisualAcuityResult<(&'a str, Chart<'a>)> {
     let contents = filenames.into_iter().map(|f| (name, f)).collect();
     let result = Chart::parse_files(contents);
     Ok((name, result?))
@@ -188,10 +228,11 @@ pub fn map_tsv(contents: &str) -> Vec<(&str, BTreeMap<&str, &str>)> {
     let mut lines = contents.lines().into_iter();
     let header = lines.next().expect("File can't have no lines!").split("\t");
     lines
-        .filter_map(|line| match line.trim() { "" => None, l => Some(l) })
+        .filter_map(|line| match line.trim() {
+            "" => None,
+            l => Some(l),
+        })
         .map(|line| (line, line.split("\t")))
         .map(|(line, columns)| (line, header.clone().zip(columns).collect()))
         .collect()
 }
-
-

@@ -1,6 +1,6 @@
+use itertools::ExactlyOneError;
 use std::fmt::{Debug, Display, Formatter};
 use std::num::{ParseFloatError, ParseIntError};
-use itertools::ExactlyOneError;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum VisualAcuityError {
@@ -24,7 +24,10 @@ pub enum VisualAcuityError {
 }
 
 impl<L, T, E> From<lalrpop_util::ParseError<L, T, E>> for VisualAcuityError
-    where L: Debug, T: Debug, E: Debug
+where
+    L: Debug,
+    T: Debug,
+    E: Debug,
 {
     fn from(value: lalrpop_util::ParseError<L, T, E>) -> Self {
         VisualAcuityError::ParseError(format!("{value:?}"))
@@ -45,27 +48,32 @@ impl From<ParseFloatError> for VisualAcuityError {
 
 impl<T> From<VisualAcuityError> for lalrpop_util::ParseError<usize, T, &str> {
     fn from(_: VisualAcuityError) -> Self {
-        Self::User { error: "Parse error!" }
+        Self::User {
+            error: "Parse error!",
+        }
     }
 }
 
 impl<T: Clone + Into<VisualAcuityError>> From<&T> for VisualAcuityError {
-    fn from(value: &T) -> Self { value.clone().into() }
+    fn from(value: &T) -> Self {
+        value.clone().into()
+    }
 }
 
-impl<I: Iterator<Item=T>, T: ToString> From<ExactlyOneError<I>> for VisualAcuityError {
+impl<I: Iterator<Item = T>, T: ToString> From<ExactlyOneError<I>> for VisualAcuityError {
     fn from(value: ExactlyOneError<I>) -> Self {
         let mut it = value.into_iter();
         match it.next() {
             Some(item) => {
-                let formatted = [item].into_iter()
+                let formatted = [item]
+                    .into_iter()
                     .chain(it)
                     .map(|it| it.to_string())
                     .collect::<Vec<_>>()
                     .join(", ");
                 VisualAcuityError::MultipleValues(format!("[{formatted}]"))
-            },
-            None => VisualAcuityError::NoValue
+            }
+            None => VisualAcuityError::NoValue,
         }
     }
 }
@@ -74,7 +82,7 @@ impl std::error::Error for VisualAcuityError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match *self {
             VisualAcuityError::ParseError(_) => None,
-            _ => None
+            _ => None,
         }
     }
 }
@@ -94,7 +102,7 @@ impl Display for VisualAcuityError {
 pub enum OptionResult<T> {
     None,
     Some(T),
-    Err(VisualAcuityError)
+    Err(VisualAcuityError),
 }
 
 impl<T> OptionResult<T> {
@@ -103,14 +111,17 @@ impl<T> OptionResult<T> {
     }
 
     pub fn map_err<F: Fn(VisualAcuityError) -> VisualAcuityError>(self, f: F) -> Self {
-        match self { Self::Err(e) => Self::Err(f(e)), _ => self }
+        match self {
+            Self::Err(e) => Self::Err(f(e)),
+            _ => self,
+        }
     }
 
     pub fn then<M, F: Fn(T) -> R, R: Into<OptionResult<M>>>(self, f: F) -> OptionResult<M> {
         match self {
             Self::Some(v) => f(v).into(),
             Self::None => OptionResult::None,
-            Self::Err(e) => OptionResult::Err(e)
+            Self::Err(e) => OptionResult::Err(e),
         }
     }
 }
@@ -123,13 +134,19 @@ impl<T> Default for OptionResult<T> {
 
 impl<T, V: Into<T>> From<Option<V>> for OptionResult<T> {
     fn from(value: Option<V>) -> Self {
-        match value { None => Self::None, Some(v) => Self::Some(v.into()) }
+        match value {
+            None => Self::None,
+            Some(v) => Self::Some(v.into()),
+        }
     }
 }
 
 impl<T, E: Into<VisualAcuityError>> From<Result<T, E>> for OptionResult<T> {
     fn from(value: Result<T, E>) -> Self {
-        match value { Ok(v) => Self::Some(v), Err(e) => Self::Err(e.into()) }
+        match value {
+            Ok(v) => Self::Some(v),
+            Err(e) => Self::Err(e.into()),
+        }
     }
 }
 

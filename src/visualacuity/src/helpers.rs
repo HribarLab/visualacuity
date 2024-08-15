@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
-use crate::{Visit, VisitNote};
 use crate::errors::OptionResult;
+use crate::{Visit, VisitNote};
 
 pub(crate) trait RoundPlaces {
     fn round_places(&self, p: usize) -> Self;
@@ -18,7 +18,7 @@ impl<T: RoundPlaces> RoundPlaces for Option<T> {
     fn round_places(&self, p: usize) -> Self {
         match self {
             Some(x) => Some(x.round_places(p)),
-            None => None
+            None => None,
         }
     }
 }
@@ -27,7 +27,7 @@ impl<T: RoundPlaces + Clone> RoundPlaces for OptionResult<T> {
     fn round_places(&self, p: usize) -> Self {
         match self {
             Self::Some(x) => Self::Some(x.round_places(p)),
-            _ => self.clone()
+            _ => self.clone(),
         }
     }
 }
@@ -36,7 +36,7 @@ impl<T: RoundPlaces, E: Clone> RoundPlaces for Result<T, E> {
     fn round_places(&self, p: usize) -> Self {
         match self {
             Ok(x) => Ok(x.round_places(p)),
-            Err(e) => Err(e.clone())
+            Err(e) => Err(e.clone()),
         }
     }
 }
@@ -52,7 +52,9 @@ impl RoundPlaces for VisitNote {
 
 impl<K: Clone + Ord, V: RoundPlaces> RoundPlaces for BTreeMap<K, V> {
     fn round_places(&self, p: usize) -> Self {
-        self.iter().map(|(k, v)| (k.clone(), v.round_places(p))).collect()
+        self.iter()
+            .map(|(k, v)| (k.clone(), v.round_places(p)))
+            .collect()
     }
 }
 

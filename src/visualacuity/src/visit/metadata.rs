@@ -11,7 +11,7 @@ pub enum Laterality {
     Unknown,
     OS,
     OD,
-    OU
+    OU,
 }
 
 #[derive(Default, Clone, Debug, DebugAsDisplay, PartialEq, Eq, Hash)]

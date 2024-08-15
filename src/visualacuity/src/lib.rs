@@ -13,28 +13,28 @@ pub use visitinput::VisitInput;
 
 use crate::cache::LruCacher;
 pub use crate::errors::{OptionResult, VisualAcuityError, VisualAcuityResult};
-use crate::ParsedItem::*;
 use crate::parser::*;
 pub use crate::visit::metadata::*;
+use crate::ParsedItem::*;
 
-mod types;
-pub(crate) mod errors;
-pub(crate) mod parser;
-pub(crate) mod structure;
-mod distanceunits;
-mod logmar;
-mod snellen_equivalent;
-mod visit;
 mod cache;
-mod visitinput;
 mod charts;
+mod distanceunits;
+pub(crate) mod errors;
+mod logmar;
+pub(crate) mod parser;
 mod read_file;
+mod snellen_equivalent;
+pub(crate) mod structure;
+mod types;
+mod visit;
+mod visitinput;
 
+mod dataquality;
+mod helpers;
+mod macros;
 #[cfg(test)]
 pub(crate) mod tests;
-mod macros;
-mod helpers;
-mod dataquality;
 
 pub struct Parser {
     notes_parser: &'static ChartNotesParser,
@@ -42,12 +42,12 @@ pub struct Parser {
     cache: LruCacher<(String, String, String), VisualAcuityResult<Option<VisitNote>>>,
     // parse_cache: LruCacher<String, (DataQuality, ParsedItemCollection)>,
     // key_cache: LruCacher<String, VisualAcuityResult<EntryMetadata>>,
-    column_merger: ColumnMerger
+    column_merger: ColumnMerger,
 }
 
 impl Parser {
     pub fn new() -> Self {
-        lazy_static!{
+        lazy_static! {
             static ref CHART_NOTES_PARSER: ChartNotesParser = ChartNotesParser::new();
             static ref KEY_PARSER: KeyParser = KeyParser::new();
         }
@@ -56,14 +56,15 @@ impl Parser {
         let cache = LruCacher::new(cache_size);
         // let key_cache = LruCacher::new(cache_size);
         let column_merger = ColumnMerger::new(cache_size);
-        Self { notes_parser: &CHART_NOTES_PARSER, key_parser: &KEY_PARSER, cache, column_merger } //parse_cache, key_cache, column_merger }
+        Self {
+            notes_parser: &CHART_NOTES_PARSER,
+            key_parser: &KEY_PARSER,
+            cache,
+            column_merger,
+        }
     }
 
-    pub fn parse_visit(
-        &self,
-        visit_notes: VisitInput,
-    ) -> VisualAcuityResult<Visit>
-    {
+    pub fn parse_visit(&self, visit_notes: VisitInput) -> VisualAcuityResult<Visit> {
         use VisualAcuityError::*;
 
         let merged = self.column_merger.merge_plus_columns(visit_notes.into());
@@ -76,7 +77,7 @@ impl Parser {
             .partition_result();
 
         if errors.len() > 0 {
-            return Err(MultipleErrors(errors))
+            return Err(MultipleErrors(errors));
         }
 
         Ok(Visit(parsed_visit_notes))
@@ -85,17 +86,21 @@ impl Parser {
     fn parse_visit_note(
         &self,
         key: &str,
-        (text, text_plus): (&str, &str)
+        (text, text_plus): (&str, &str),
     ) -> VisualAcuityResult<Option<VisitNote>> {
         let key = key.trim();
         let text = text.trim();
         let text_plus = text_plus.trim();
 
         if (text, text_plus) == ("", "") {
-            return Ok(None)
+            return Ok(None);
         }
 
-        let cache_key = (key.to_lowercase(), text.to_lowercase(), text_plus.to_lowercase());
+        let cache_key = (
+            key.to_lowercase(),
+            text.to_lowercase(),
+            text_plus.to_lowercase(),
+        );
 
         self.cache.get(&cache_key, || {
             let parsed_text = self.parse_text(text);
@@ -108,8 +113,15 @@ impl Parser {
     fn parse_text<'input>(&self, notes: &'input str) -> Content<'input, ParsedItemCollection> {
         let notes = notes.trim();
         let (dq, content) = match self.notes_parser.parse(notes) {
-            Ok(Content { content, data_quality: dq, .. }) => (dq, content),
-            Err(e) => (DataQuality::ConvertibleFuzzy, ParsedItemCollection(vec![Unhandled(format!(" {e}"))]))
+            Ok(Content {
+                content,
+                data_quality: dq,
+                ..
+            }) => (dq, content),
+            Err(e) => (
+                DataQuality::ConvertibleFuzzy,
+                ParsedItemCollection(vec![Unhandled(format!(" {e}"))]),
+            ),
         };
         Content::new(content, notes, dq)
     }

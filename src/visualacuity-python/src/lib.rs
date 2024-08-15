@@ -20,22 +20,25 @@ fn visualacuity_python(_py: Python, m: &PyModule) -> PyResult<()> {
 }
 
 #[pyclass]
-pub struct Parser {
+struct Parser {
     parser: visualacuity::Parser
 }
 
 #[pymethods]
 impl Parser {
     #[new]
-    pub fn new() -> anyhow::Result<Self> {
+    fn new() -> PyResult<Self> {
         let parser = visualacuity::Parser::new();
         Ok(Self { parser })
     }
 
-    pub fn parse_visit(&self, notes: BTreeMap<&str, &str>) -> PyResult<PyWrap<visualacuity::Visit>> {
+    fn parse_visit(
+        &self,
+        notes: BTreeMap<String, String>,
+    ) -> PyResult<PyWrap<visualacuity::Visit>> {
         match self.parser.parse_visit(notes.into()) {
             Ok(result) => Ok(result.into()),
-            Err(e) => Err(PyValueError::new_err(format!("{:?}", e)))
+            Err(e) => Err(PyValueError::new_err(format!("{:?}", e))),
         }
     }
 }

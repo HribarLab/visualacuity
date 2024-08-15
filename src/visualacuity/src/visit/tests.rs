@@ -4,12 +4,11 @@ mod tests {
     use std::fmt::Debug;
     use test_case::test_case;
 
-
-    use crate::*;
-    use crate::visit::*;
     use crate::visit::Correction::*;
-    use crate::visit::Laterality::*;
     use crate::visit::DistanceOfMeasurement::*;
+    use crate::visit::Laterality::*;
+    use crate::visit::*;
+    use crate::*;
 
     type R<T> = VisualAcuityResult<T>;
 
@@ -21,10 +20,12 @@ mod tests {
         let sifted = &SiftedParsedItems::sift(parsed_notes);
 
         assert_eq!(vec![VisualResponse(s!("CSM"))], sifted.acuities);
-        assert_eq!(OptionResult::Some(VisualResponse(s!("CSM"))), sifted.base_acuity_());
+        assert_eq!(
+            OptionResult::Some(VisualResponse(s!("CSM"))),
+            sifted.base_acuity_()
+        );
         Ok(())
     }
-
 
     #[test_case(
         [
@@ -74,7 +75,7 @@ mod tests {
     // )]
     fn test_visit<'a, X: Into<VisitInput>, Y: Into<BTreeMap<String, Option<VisitNote>>>>(
         visit_notes: X,
-        expected: R<Y>
+        expected: R<Y>,
     ) {
         let expected = expected.map(|v| Visit(v.into()));
         let parser = Parser::new();
@@ -88,7 +89,9 @@ mod tests {
     #[test_case([("Left Eye SC", "20/20")], Ok(SC))]
     #[test_case([("Manifest Left Eye", "20/20")], Ok(Manifest))]
     // #[test_case([("Right Eye SC", "20/20 J5 CC")], Ok(Correction::Error(MultipleValues(s!("[SC, CC]")))))]
-    fn test_visit_correction<'a, X>(visit_notes: X, expected: R<Correction>) where X: Into<VisitInput>
+    fn test_visit_correction<'a, X>(visit_notes: X, expected: R<Correction>)
+    where
+        X: Into<VisitInput>,
     {
         test_visit_values(visit_notes, expected, |v: VisitNote| v.correction);
     }
@@ -100,9 +103,12 @@ mod tests {
     #[test_case([("Manifest Both Eyes", "20/20")], Ok(Distance))]
     #[test_case([("Manifest Both Eyes Near", "20/20")], Ok(Near))]
     fn test_visit_distance_of_measurement<'a, X>(visit_notes: X, expected: R<DistanceOfMeasurement>)
-        where X: Into<VisitInput>
+    where
+        X: Into<VisitInput>,
     {
-        test_visit_values(visit_notes, expected, |v: VisitNote| v.distance_of_measurement);
+        test_visit_values(visit_notes, expected, |v: VisitNote| {
+            v.distance_of_measurement
+        });
     }
 
     #[test_case([("Left Eye Distance SC", "20/30")], Ok(OS))]
@@ -113,7 +119,8 @@ mod tests {
     //     Ok(Laterality::Error(MultipleValues(s ! ("[OS, OU]"))))
     // )]
     fn test_visit_laterality<'a, X>(visit_notes: X, expected: R<Laterality>)
-        where X: Into<VisitInput>
+    where
+        X: Into<VisitInput>,
     {
         test_visit_values(visit_notes, expected, |v: VisitNote| v.laterality);
     }
@@ -122,27 +129,26 @@ mod tests {
     #[test_case([("Visual Acuity", "CSM")], Ok(Exact))]
     #[test_case([("Visual Acuity", "CSM pref")], Ok(Exact))]
     fn test_visit_data_quality<'a, X>(visit_notes: X, expected: R<DataQuality>)
-        where X: Into<VisitInput>
+    where
+        X: Into<VisitInput>,
     {
         test_visit_values(visit_notes, expected, |v: VisitNote| v.data_quality);
     }
 
-    fn test_visit_values<V, T, F>(
-        visit_notes: V,
-        expected: R<T>,
-        f: F,
-    )
+    fn test_visit_values<V, T, F>(visit_notes: V, expected: R<T>, f: F)
     where
         V: Into<VisitInput>,
         T: PartialEq + Debug,
-        F: Fn(VisitNote) -> T
+        F: Fn(VisitNote) -> T,
     {
         let expected = expected.map(|v| vec![v]);
         let visit_notes = visit_notes.into();
 
-        let actual = Parser::new()
-            .parse_visit(visit_notes.clone())
-            .map(|r| r.into_iter().map(|(_, v)| f(v.expect("TEST"))).collect_vec());
+        let actual = Parser::new().parse_visit(visit_notes.clone()).map(|r| {
+            r.0.into_iter()
+                .map(|(_, v)| f(v.expect("TEST")))
+                .collect_vec()
+        });
 
         assert_eq!(actual, expected, "{visit_notes:?}");
     }
