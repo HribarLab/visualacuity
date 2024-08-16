@@ -42,7 +42,6 @@ class VisualAcuityVisitStatsLoader(MapReduceLoader[Counter, Counter]):
         DataQuality.CONVERTIBLE_FUZZY,
         DataQuality.NO_VALUE,
         DataQuality.MULTIPLE,
-        DataQuality.UNUSABLE
     }
 
     def map(self, visit: Visit) -> Counter:

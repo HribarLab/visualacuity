@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 
 from visualacuity import *
-from visualacuity.cli import as_main, TabularCounter, MapReduceLoader
+from visualacuity.cli import as_main, TabularCounter, MapReduceLoader, make_dirs_for_file
 
 ARGS = ArgumentParser()
 ARGS.add_argument(
@@ -20,6 +20,7 @@ def main(filenames, out_file, *, processes=None):
     loader = VisualAcuityVisitStatsLoader(processes=processes)
     counts = loader.read_csv(*filenames)
     stats = format_stats(counts)
+    make_dirs_for_file(out_file)
     stats.to_csv(out_file)
 
 

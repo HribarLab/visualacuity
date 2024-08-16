@@ -46,8 +46,8 @@ class VisualAcuityDistributionLoader(MapReduceLoader[TabularCounter, TabularCoun
     def map(self, visit: Visit) -> TabularCounter:
         counts = TabularCounter()
         for key, entry in visit.items():
-            if entry is not None:
-                va_bin = VisualAcuityBin.get(entry)
+            va_bin = VisualAcuityBin.get(entry)
+            if va_bin != VisualAcuityBin.EMPTY:
                 dq = entry.data_quality.value
                 counts[va_bin, dq] += 1
         return counts
