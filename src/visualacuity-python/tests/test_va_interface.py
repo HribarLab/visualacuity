@@ -12,10 +12,11 @@ class TestVAInterface(unittest.TestCase):
             (
                 {"Both Eyes Distance CC": "20/30 -1"},
                 {"Both Eyes Distance CC": VisitNote(
+                    data_quality=EXACT,
                     laterality=OU,
                     distance_of_measurement=DISTANCE,
                     correction=CC,
-                    method=SNELLEN,
+                    va_format=SNELLEN,
                     extracted_value="20/30",
                     plus_letters=[-1],
                     snellen_equivalent=(20.0, 30.0),
@@ -26,10 +27,11 @@ class TestVAInterface(unittest.TestCase):
             (
                 {"Both Eyes Distance CC": "20/20", "Both Eyes Distance CC Plus": "+2"},
                 {"Both Eyes Distance CC": VisitNote(
+                    data_quality=EXACT,
                     laterality=OU,
                     distance_of_measurement=DISTANCE,
                     correction=CC,
-                    method=SNELLEN,
+                    va_format=SNELLEN,
                     plus_letters=[+2],
                     extracted_value="20/20",
                     snellen_equivalent=(20.0, 20.0),
@@ -49,10 +51,11 @@ class TestVAInterface(unittest.TestCase):
                 },
                 {
                     "Both Eyes Distance CC": VisitNote(
+                        data_quality=EXACT,
                         laterality=OU,
                         distance_of_measurement=DISTANCE,
                         correction=CC,
-                        method=SNELLEN,
+                        va_format=SNELLEN,
                         plus_letters=[-2],
                         extracted_value="20/20",
                         snellen_equivalent=(20, 20),
@@ -60,10 +63,11 @@ class TestVAInterface(unittest.TestCase):
                         log_mar_base_plus_letters=0.03230333766935213,
                     ),
                     "Both Eyes Distance SC": VisitNote(
+                        data_quality=EXACT,
                         laterality=OU,
                         distance_of_measurement=DISTANCE,
                         correction=SC,
-                        method=SNELLEN,
+                        va_format=SNELLEN,
                         plus_letters=[-1],
                         extracted_value="20/20",
                         snellen_equivalent=(20.0, 20.0),
@@ -71,10 +75,11 @@ class TestVAInterface(unittest.TestCase):
                         log_mar_base_plus_letters=0.016151668834676065,
                     ),
                     "Both Eyes Near CC": VisitNote(
+                        data_quality=EXACT,
                         laterality=OU,
                         distance_of_measurement=NEAR,
                         correction=CC,
-                        method=JAEGER,
+                        va_format=JAEGER,
                         extracted_value="J2",
                         snellen_equivalent=(20.0, 25.0),
                         log_mar_base=0.09691001300805639,

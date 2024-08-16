@@ -1,50 +1,60 @@
-EHR Entry	EHR Entry Plus	Method	Extracted Value	Plus Letters	Comment
-20 / 30 + 1	""	Snellen	20/30	+1	""
-20 / 30 +3 -1	""	Snellen	20/30	+3, -1	""
-20/30-1+6	""	Snellen	20/30	-1, +6	""
-20/30	-1+6	Snellen	20/30	-1, +6	""
-text 20/30 +1 -3 text	""	Snellen	20/30	+1, -3	""
-text 20/30 text	+1 -3	Snellen	20/30	+1, -3	""
-20/23 (38.0 cy/cm) Card 17	""	Teller	Card 17	""	""
-20/321	""	Unknown	""	""	""
-20/312	""	Unknown	""	""	""
-J1	""	Jaeger	J1	""	""
-J1+	""	Jaeger	J1+	""	""
-J0	""	Jaeger	J1+	""	Equivalent of J1+
-J29	""	Jaeger	J29	""	""
-J30	""	Unknown	""	""	Unknown value
-J4 +2	""	Jaeger	J4	+2	""
-79 letters	""	ETDRS	79 letters	""	""
-96 letters	""	Unknown	""	""	""
-123 letters	""	Unknown	""	""	""
-81ltrs	""	ETDRS	81 letters	""	""
-20/20 ETDRS (83 letters)	""	ETDRS	83 letters	""	""
-20/20 ETDRS 83 letters	""	ETDRS	83 letters	""	""
-CF	""	LowVision	CF	""	""
-HM	""	LowVision	HM	""	""
-NLP	""	LowVision	NLP	""	""
-LP	""	LowVision	LP	""	""
-BTL	""	LowVision	LP	""	""
-blink to light	""	LowVision	LP	""	""
-NI	""	PinHole	NI	""	""
-CF at 1.5ft	""	LowVision	CF @ 1.5 feet	""	""
-# CF 2	""	Unknown	""	""	""
-# CF@3	""	Unknown	""	""	""
-CSM	""	Binocular	CSM	""	""
-CSM Pref	""	Binocular	CSM	""	""
-fix and follow	""	Binocular	FixAndFollow	""	""
-fix & follow	""	Binocular	FixAndFollow	""	""
-FF	""	Binocular	FixAndFollow	""	""
-F + F	""	Binocular	FixAndFollow	""	""
-F&F	""	Binocular	FixAndFollow	""	""
-f/f	""	Binocular	FixAndFollow	""	""
-no fix & follow	""	Binocular	NoFixAndFollow	""	""
-Fix, No Follow	""	Binocular	FixNoFollow	""	""
-CSM, good f+f	""	Binocular	CSM	""	""
-NI	""	PinHole	NI	""	""
-NT	""	NotTaken	NT	""	""
-unable	""	NotTaken	Unable	""	""
-prosthesis	""	NotTaken	Prosthesis	""	""
-Forgot glasses today	""	Unknown	""	""	""
-CF at 8 feet to 20/400	""	Error	Error	""	Multiple matches for VA
-20/20 J5	""	Error	Error	""	Multiple matches for VA
+EHR Entry	EHR Entry Plus	Data Quality	Format	Extracted Value	Plus Letters	Comment
+20 / 30		Exact	Snellen	20/30		
+20 / 30 + 1		Exact	Snellen	20/30	+1	
+20/30 soft	+1 -3	ConvertibleConfident	Snellen	20/30	+1, -3	
+20 / 30 +3 -1		ConvertibleFuzzy	Snellen	20/30	+3, -1	
+20/30-1+6		ConvertibleFuzzy	Snellen	20/30	-1, +6	
+20/20+		ConvertibleFuzzy	Snellen	20/20		plus/minus no value -- fuzzy
+20/20-		ConvertibleFuzzy	Snellen	20/20		plus/minus no value -- fuzzy
+barely 20/30	+1 -3	ConvertibleConfident	Snellen	20/30	+1, -3	
+1) 20/30 and maybe some text	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
+1st 20/30 and maybe some text	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
+20/30 and some unrecognized text	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
+some unrecognized text and 20/30	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
+unrecognized text 20/30 unrecognized text	+1 -3	ConvertibleFuzzy	Snellen	20/30	+1, -3	
+unrecognized text	""	NoValue	Unknown			
+20/23 (38.0 cy/cm) Card 17		Exact	Teller	Card 17		
+20/321		NoValue	Unknown			
+20/312		NoValue	Unknown			
+J1		Exact	Jaeger	J1		
+J1+		Exact	Jaeger	J1+		
+J0		ConvertibleConfident	Jaeger	J1+		Equivalent of J1+
+J29		Exact	Jaeger	J29		
+J30		NoValue	Unknown			Unknown value
+J4 +2		Exact	Jaeger	J4	+2	
+79 letters		Exact	ETDRS	79 letters		
+96 letters		NoValue	Unknown			
+123 letters		NoValue	Unknown			
+81ltrs		Exact	ETDRS	81 letters		
+20/20 ETDRS (83 letters)		Exact	ETDRS	83 letters		
+20/20 ETDRS 83 letters		Exact	ETDRS	83 letters		
+CF		Exact	NearTotalLoss	CF		
+HM		Exact	NearTotalLoss	HM		
+JM		NoValue	Unknown			Typo for HM?
+NLP		Exact	NearTotalLoss	NLP		
+LP		Exact	NearTotalLoss	LP		
+BTL		Exact	VisualResponse	BTL		# Exact??
+blink to light		Exact	VisualResponse	BTL		# Exact??
+wince to light		Exact	VisualResponse	WTL		# Exact??
+WTL		Exact	VisualResponse	WTL		# Exact??
+CF at 1.5ft		Exact	NearTotalLoss	CF @ 1.5 feet		
+# CF 2		Exact	Unknown			
+# CF@3		Exact	Unknown			
+CSM		Exact	VisualResponse	CSM		
+CSM Pref		Exact	VisualResponse	CSM prefers		
+fix and follow		Exact	VisualResponse	fix & follow		
+fix & follow		Exact	VisualResponse	fix & follow		
+FF		Exact	VisualResponse	fix & follow		
+F + F		Exact	VisualResponse	fix & follow		
+F&F		Exact	VisualResponse	fix & follow		
+f/f		Exact	VisualResponse	fix & follow		
+no fix & follow		Exact	VisualResponse	no fix & follow		
+Fix, No Follow		Exact	VisualResponse	fix, no follow		
+# CSM, good f+f		Exact	VisualResponse	CSM		Multiple values
+NI		CrossReference	CrossReference	NI		If we can fill in the xref, we can update the format and extracted value
+NT		NoValue	NotTaken	NT		
+unable		NoValue	NotTaken	Unable		
+prosthesis		NoValue	NotTaken	Prosthesis		
+Forgot glasses today		NoValue	Unknown			
+CF at 8 feet to 20/400		Multiple	Error	Error		Multiple matches for VA
+20/20 J5		Multiple	Error	Error		Multiple matches for VA

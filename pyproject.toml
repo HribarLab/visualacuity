@@ -10,7 +10,7 @@ module-name = "visualacuity._lib"
 [project]
 name = "visualacuity"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.8"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",

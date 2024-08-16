@@ -1,13 +1,13 @@
 extern crate lru;
 
+use lru::LruCache;
 use std::cell::RefCell;
-use std::sync::Arc;
 use std::hash::Hash;
 use std::num::NonZeroUsize;
-use lru::LruCache;
+use std::sync::Arc;
 
 pub(crate) struct LruCacher<K, V> {
-    cache: RefCell<LruCache<K, Arc<V>>>
+    cache: RefCell<LruCache<K, Arc<V>>>,
 }
 
 impl<K: Clone + Hash + Eq, V: Clone> LruCacher<K, V> {
@@ -18,7 +18,8 @@ impl<K: Clone + Hash + Eq, V: Clone> LruCacher<K, V> {
     }
 
     pub(crate) fn get<F>(&self, key: &K, func: F) -> V
-        where F: Fn() -> V
+    where
+        F: Fn() -> V,
     {
         let mut cache = self.cache.borrow_mut();
         match cache.get(key) {
