@@ -1,6 +1,6 @@
 [package]
 name = "visualacuity-python"
-version = "0.1.0-alpha6"
+version = "0.1.0-alpha7"
 edition = "2021"
 
 [lib]
