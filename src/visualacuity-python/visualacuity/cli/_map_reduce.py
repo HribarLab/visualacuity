@@ -60,13 +60,7 @@ class MapReduceLoader(Generic[TMap, TReduce], metaclass=abc.ABCMeta):
         jobs = self._maybe_parallel(self._parse_map, reader)
         for i, mapped in enumerate(jobs, start=1):
             accum = self.reduce(accum, mapped)
-            self.callback(i, self.progress.total, mapped, accum)
         return accum
-
-    def callback(self, line_num: int, total_lines: int, mapped: TMap, accum: TReduce):
-        self.progress.total = total_lines
-        self.progress.n = line_num
-        self.progress.refresh()
 
     def _parse_map(self, row):
         return self.map(self.parse(row))
@@ -94,6 +88,8 @@ class MultiCsvReader:
                 for overall_number, row in enumerate(reader, start=overall_number):
                     self.update_progress(file_number, reader.line_num, overall_number, total)
                     yield row
+        if self.progress:
+            self.progress.close()
 
     def update_progress(self, file_number, file_line_number, overall_number, total):
         if self.progress is None:

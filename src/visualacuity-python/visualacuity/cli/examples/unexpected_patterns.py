@@ -1,3 +1,4 @@
+import sys
 from argparse import ArgumentParser
 from collections import Counter
 
@@ -25,6 +26,7 @@ def main(filenames, out_file, *, processes=None):
     stats = format_stats(counts)
     make_dirs_for_file(out_file)
     stats.to_csv(out_file)
+    print(f"Wrote file: {out_file}", file=sys.stderr)
 
 
 def format_stats(counts: TabularCounter):
