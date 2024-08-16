@@ -15,7 +15,6 @@ class DataQuality(_OrderedEnumMixIn, _FancyEnumMixIn, Enum):
     CROSS_REFERENCE = "CrossReference"
     CONVERTIBLE_CONFIDENT = "ConvertibleConfident"
     CONVERTIBLE_FUZZY = "ConvertibleFuzzy"
-    UNUSABLE = "Unusable"
 
 
 class Laterality(_FancyEnumMixIn, Enum):

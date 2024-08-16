@@ -9,7 +9,7 @@ import sys
 import visualacuity
 from visualacuity import Visit, VisitNote, DataQuality
 from visualacuity._enum_helpers import _OrderedEnumMixIn
-from visualacuity.cli import as_main, TabularCounter, MapReduceLoader
+from visualacuity.cli import as_main, TabularCounter, MapReduceLoader, make_dirs_for_file
 
 MAX_LOGMAR = 2.0
 
@@ -21,17 +21,25 @@ ARGS.add_argument(
     "out_file", help="Path to save the output file."
 )
 ARGS.add_argument(
+    "--plot-file", help="Path to save the plot. Uses Matplotlib formats: *.(pdf|svg|png|...)]."
+)
+ARGS.add_argument(
     "--processes", type=int, default=None, help="The number of processes to use for parallel execution."
 )
 
 
 @as_main(ARGS)
-def main(filenames, out_file, *, processes=None):
+def main(filenames, out_file, plot_file, *, processes=None):
     loader = VisualAcuityDistributionLoader(processes=processes)
     distribution = loader.read_csv(*filenames)
     df = distribution.to_dataframe()
+    make_dirs_for_file(out_file)
     df.to_csv(out_file)
-    draw_histogram(df, out_file + ".pdf")
+    print(f"Wrote file: {out_file}", file=sys.stderr)
+    if plot_file:
+        make_dirs_for_file(plot_file)
+        draw_histogram(df, plot_file)
+        print(f"Wrote file: {plot_file}", file=sys.stderr)
 
 
 class VisualAcuityDistributionLoader(MapReduceLoader[TabularCounter, TabularCounter]):
@@ -64,13 +72,6 @@ class VisualAcuityDistributionLoader(MapReduceLoader[TabularCounter, TabularCoun
 
     def index(self):
         return list(VisualAcuityBin)[1:]
-
-    def callback(self, line_num: int, total_lines: int, mapped: pandas.DataFrame, accum: pandas.DataFrame):
-        super().callback(line_num, total_lines, mapped, accum)
-        if line_num % 100000 == 0:
-            df = accum.to_dataframe()
-            df.to_csv("examples/distribution_temp.csv")
-            draw_histogram(df, "examples/distribution_temp.pdf")
 
 
 def draw_histogram(stacked: pandas.DataFrame, out_file):

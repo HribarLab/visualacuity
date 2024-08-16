@@ -2,7 +2,7 @@ import os
 from argparse import ArgumentParser
 
 from visualacuity import Visit, DISTANCE, CC, NEAR_TOTAL_LOSS
-from visualacuity.cli import as_main, TabularCounter, MapReduceLoader
+from visualacuity.cli import as_main, TabularCounter, MapReduceLoader, make_dirs_for_file
 
 ARGS = ArgumentParser()
 ARGS.add_argument(
@@ -21,7 +21,7 @@ def main(filenames, out_file, *, processes=None):
     loader = VisualAcuityVisitStatsLoader(processes=processes)
     counts = loader.read_csv(*filenames)
     stats = format_stats(counts)
-    os.makedirs(os.path.dirname(os.path.abspath(out_file)), exist_ok=True)
+    make_dirs_for_file(out_file)
     stats.to_csv(out_file)
 
 

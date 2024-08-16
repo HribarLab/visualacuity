@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from collections import Counter
 
 from visualacuity import Visit, DataQuality
-from visualacuity.cli import as_main, TabularCounter, MapReduceLoader
+from visualacuity.cli import as_main, TabularCounter, MapReduceLoader, make_dirs_for_file
 
 MIN_COUNT = 5
 
@@ -23,6 +23,7 @@ def main(filenames, out_file, *, processes=None):
     loader = VisualAcuityVisitStatsLoader(processes=processes)
     counts = loader.read_csv(*filenames)
     stats = format_stats(counts)
+    make_dirs_for_file(out_file)
     stats.to_csv(out_file)
 
 
@@ -50,7 +51,7 @@ class VisualAcuityVisitStatsLoader(MapReduceLoader[Counter, Counter]):
             if entry is None:
                 continue
 
-            text = " ".join(s for s in (entry.text, entry.text_plus) if s)
+            text = CaseInsensitive(" ".join(s for s in (entry.text, entry.text_plus) if s))
             if not entry.extracted_value or entry.data_quality in self.DQ:
                 row = (text, entry.data_quality.value, "")
                 counts[row, "Any"] += 1
@@ -70,8 +71,10 @@ class VisualAcuityVisitStatsLoader(MapReduceLoader[Counter, Counter]):
         accum.update(mapped)
         return accum
 
-    def callback(self, line_num: int, total_lines: int, mapped: TabularCounter, accum: TabularCounter):
-        super().callback(line_num, total_lines, mapped, accum)
-        if line_num % 100000 == 0:
-            stats = format_stats(accum)
-            stats.to_csv("examples/unexpected_patterns_temp.csv")
+
+class CaseInsensitive(str):
+    def __eq__(self, other):
+        return self.lower() == other.lower()
+
+    def __hash__(self):
+        return hash(self.lower())

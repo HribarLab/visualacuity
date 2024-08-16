@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 
-from visualacuity import Visit, VAFormat
-from visualacuity.cli import as_main, TabularCounter, MapReduceLoader, make_dirs_for_file
+from visualacuity import *
+from visualacuity.cli import as_main, TabularCounter, MapReduceLoader
 
 ARGS = ArgumentParser()
 ARGS.add_argument(
@@ -14,44 +14,42 @@ ARGS.add_argument(
     "--processes", type=int, default=None, help="The number of processes to use for parallel execution."
 )
 
+
 @as_main(ARGS)
 def main(filenames, out_file, *, processes=None):
     loader = VisualAcuityVisitStatsLoader(processes=processes)
     counts = loader.read_csv(*filenames)
     stats = format_stats(counts)
-    make_dirs_for_file(out_file)
     stats.to_csv(out_file)
 
 
 def format_stats(counts: TabularCounter):
-    n = counts["Overall", "Snellen"]
-    counts = counts.to_dataframe().sort_values("Snellen", ascending=False)
-    stats = counts.map(lambda x: f"{x:,} ({100 * x / n:.1f}%)" if x and n else "0")
-    stats["Snellen"] = [f"{n:,}" for n in counts["Snellen"]]
-    stats["Snellen with +/-"] = [
-        f"{num:,}/{den:,} ({100 * num / den:.1f}%)" if den else "0"
-        for num, den in zip(counts["With +/-"], counts["Snellen"])
-    ]
-    return stats[["Snellen with +/-"]]
+    counts = counts.to_dataframe().sort_values("Exact", ascending=False)
+    stats = counts.copy().astype("str")
+    for idx, row in counts.iterrows():
+        stats.loc[idx] = [f"{x:,} ({100 * x / row['Total']:.1f}%)" for x in row]
+    stats["Total"] = counts["Total"]
+    return stats
 
 
 class VisualAcuityVisitStatsLoader(MapReduceLoader[TabularCounter, TabularCounter]):
+    COLUMNS = ["Total", "Exact", "Convertible", "Unusable"]
+    USABILITY = {EXACT: "Exact", CONVERTIBLE_CONFIDENT: "Convertible", CONVERTIBLE_FUZZY: "Convertible"}
+
     def map(self, visit: Visit) -> TabularCounter:
-        counts = TabularCounter(rows=("Overall", *visit.keys()))
+        counts = TabularCounter(rows=("Any", *visit.keys()))
         for key, entry in visit.items():
             if entry is None:
                 continue
-
-            if entry.va_format == VAFormat.SNELLEN:
-                counts[key, "Snellen"] += 1
-                counts["Overall", "Snellen"] += 1
-                if len(entry.plus_letters) >= 1:
-                    counts[key, "With +/-"] += 1
-                    counts["Overall", "With +/-"] += 1
+            usability = self.USABILITY.get(entry.data_quality, "Unusable")
+            counts[key, usability] += 1
+            counts["Any", usability] += 1
+            counts[key, "Total"] += 1
+            counts["Any", "Total"] += 1
         return counts
 
     def reduce(self, accum: TabularCounter, mapped: TabularCounter) -> TabularCounter:
         if accum is None:
-            return mapped
+            accum = TabularCounter(index_name="Field", columns=self.COLUMNS)
         accum.update(mapped)
         return accum
