@@ -24,7 +24,7 @@ pip install visualacuity
 ### Example Scripts
 
 #### Prerequisites
-For the example scripts, we'll need to install a few more Python packages: `pip install pandas tqdm matplotlib`
+For the example scripts, we'll need to install a few more Python packages: `pip install "pandas~=2.1" tqdm matplotlib`
 
 #### Data
 
