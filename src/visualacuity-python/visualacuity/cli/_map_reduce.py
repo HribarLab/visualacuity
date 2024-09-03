@@ -11,7 +11,7 @@ from visualacuity import Visit
 
 
 def n_lines(filename):
-    with open(filename, "rbU") as f:
+    with open(filename, "rb") as f:
         for total, _ in enumerate(f):
             pass
         return total
@@ -103,7 +103,7 @@ class MultiCsvReader:
         try:
             total = 0
             for filename in self.filenames:
-                with open(filename, "rbU") as f:
+                with open(filename, "rb") as f:
                     for total, _ in enumerate(f, start=total):
                         pass
             return total
